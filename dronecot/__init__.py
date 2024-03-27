@@ -21,7 +21,7 @@
 :source: <https://github.com/snstac/dronecot>
 """
 
-__version__ = "1.0.0-beta4"
+__version__ = "1.0.0-beta5"
 __author__ = "Greg Albrecht <gba@snstac.com>"
 __copyright__ = "Copyright Sensors & Signals LLC https://www.snstac.com"
 __license__ = "Apache License, Version 2.0"
