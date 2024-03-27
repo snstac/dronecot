@@ -27,8 +27,6 @@ __copyright__ = "Copyright Sensors & Signals LLC https://www.snstac.com"
 __license__ = "Apache License, Version 2.0"
 
 from .constants import (  # NOQA
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_FEED_URL,
     DEFAULT_MQTT_BROKER,
     DEFAULT_MQTT_PORT,
     DEFAULT_MQTT_TOPIC,
@@ -37,7 +35,6 @@ from .constants import (  # NOQA
 from .functions import (  # NOQA
     xml_to_cot,
     create_tasks,
-    parse_payload,
 )
 from .classes import MQTTWorker, RIDWorker  # NOQA
-from .open_drone_id import ODIDValidBlocks, decode_valid_blocks  # NOQA
+from .open_drone_id import ODIDValidBlocks, decode_valid_blocks, parse_payload  # NOQA
