@@ -127,10 +127,14 @@ __license__ = "Apache License, Version 2.0"
 # }
 
 
-# class FunctionsTestCase(unittest.TestCase):
-#     """
-#     Test class for functions... functions.
-#     """
+class FunctionsTestCase(unittest.TestCase):
+    """
+    Test class for functions... functions.
+    """
+
+    def test_test(self):
+        assert True
+
 
 #     def test_adsb_to_cot_xml(self):
 #         """Test that adsb_to_cot serializses ADS-B as valid Cursor on Target XML Object."""
