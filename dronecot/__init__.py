@@ -18,17 +18,27 @@
 
 """Drone Open Remote ID to TAK Gateway."""
 
-__version__ = "1.0.0-beta6"
+__version__ = "1.0.0-beta7"
 
-from .constants import (  # NOQA
-    DEFAULT_MQTT_BROKER,
-    DEFAULT_MQTT_PORT,
-    DEFAULT_MQTT_TOPIC,
-    DEFAULT_GPS_INFO_CMD,
-)
-from .functions import (  # NOQA
-    xml_to_cot,
-    create_tasks,
-)
-from .classes import MQTTWorker, RIDWorker  # NOQA
-from .open_drone_id import ODIDValidBlocks, decode_valid_blocks, parse_payload  # NOQA
+# COMPAT Python 3.6 test/build work-around:
+try:
+    from .constants import (  # NOQA
+        DEFAULT_MQTT_BROKER,
+        DEFAULT_MQTT_PORT,
+        DEFAULT_MQTT_TOPIC,
+        DEFAULT_GPS_INFO_CMD,
+    )
+    from .functions import (  # NOQA
+        xml_to_cot,
+        create_tasks,
+    )
+    from .classes import MQTTWorker, RIDWorker  # NOQA
+    from .open_drone_id import (
+        ODIDValidBlocks,
+        decode_valid_blocks,
+        parse_payload,
+    )  # NOQA
+except ImportError as exc:
+    import warnings
+
+    warnings.warn(f"COMPAT Python 3.6. Ignoring Exception {str(exc)}")
