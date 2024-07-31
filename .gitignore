@@ -35,3 +35,4 @@ __pycache__
 known_craft.csv
  .mypy_cache/ 
  .pytest_cache/config.ini
+config.ini

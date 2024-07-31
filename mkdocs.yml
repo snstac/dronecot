@@ -1,7 +1,7 @@
-site_name: DroneCOT - Display Aircraft in TAK
+site_name: DroneCOT - Display Drones in TAK
 site_url: https://dronecot.rtfd.io/
 repo_url: https://github.com/snstac/dronecot/
-site_description: Software for monitoring and analyzing aviation surveillance data via the Team Awareness Kit (TAK) ecosystem of products.
+site_description: Software for monitoring and analyzing UAS data via the Team Awareness Kit (TAK) ecosystem of products.
 site_author: Greg Albrecht <gba@snstac.com>
 copyright: Copyright Sensors & Signals LLC https://www.snstac.com
 

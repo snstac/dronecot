@@ -10,8 +10,6 @@ DroneCOT captures & reports real-time data received from drones into TAK product
 
 DroneCOT has been evaluated with WinTAK, iTAK, ATAK & TAK Server.
 
-DroneCOT is in active use today in a variety of missions.
-
 `Documentation is available here. <https://dronecot.rtfd.io>`_
 
 License
