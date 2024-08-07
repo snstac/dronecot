@@ -18,7 +18,7 @@
 
 """Drone Open Remote ID to TAK Gateway."""
 
-__version__ = "1.0.0-beta7"
+__version__ = "1.0.0-beta8"
 
 # COMPAT Python 3.6 test/build work-around:
 try:
