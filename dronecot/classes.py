@@ -34,8 +34,15 @@ import dronecot
 class MQTTWorker(pytak.QueueWorker):
     """Queue Worker for MQTT."""
 
+    def __init__(self, queue, config):
+        """Initialize this class."""
+        super().__init__(queue, config)
+        self.sensor_positions = {}
+
     async def parse_message(self, message):
         """Parse Open Drone ID message from MQTT."""
+        topic = message.topic.value
+        self._logger.debug("Message topic: %s", topic)
         try:
             # not compressed
             payload = message.payload.decode()
@@ -59,14 +66,30 @@ class MQTTWorker(pytak.QueueWorker):
                 payload = payload[position + 1 :]
                 json_obj = json.loads(message_payload)
 
-            proto = json_obj.get("protocol")
-            if proto != 1.0:
-                return
-
-            if json_obj.get("data"):
+            if "position" in topic:
+                json_obj["topic"] = topic
+                await self.handle_sensor_position(json_obj)
+            elif json_obj.get("data"):
+                json_obj["topic"] = topic
                 await self.handle_sensor_data(json_obj)
             elif json_obj.get("status"):
+                json_obj["topic"] = topic
                 await self.handle_sensor_status(json_obj)
+
+    async def handle_sensor_position(self, message):
+        """Process sensor position messages."""
+        topic = message.get("topic")
+        sensor = topic.split("/")[2]
+        self.sensor_positions[sensor] = {
+            "lat": message.get("lat"),
+            "lon": message.get("lon"),
+            "altHAE": message.get("altHAE"),
+            "altMSL": message.get("altMSL"),
+            "alt": message.get("alt"),
+            "track": message.get("track"),
+            "magtrack": message.get("magtrack"),
+            "speed": message.get("speed"),
+        }
 
     async def handle_sensor_data(self, message):
         """Process decoded data from the sensor."""
@@ -82,29 +105,40 @@ class MQTTWorker(pytak.QueueWorker):
         await self.put_queue(pl)
 
     async def handle_sensor_status(self, message):
-        """Process sensor status."""
+        """Process sensor status messages."""
         status = message.get("status")
         if not status:
             return
-        await self.put_queue(message)
+
+        topic = message["topic"]
+        sensor = topic.split("/")[2]
+
+        position = self.sensor_positions.get(sensor) or {}
+        pl = position | message
+        self._logger.info("Publishing status for sensor: %s", sensor)
+        await self.put_queue(pl)
 
     async def run(self, _=-1) -> None:
         """Run this Thread, Reads from Pollers."""
-        self._logger.info("Run: MQTTWorker")
+        self._logger.info("Running MQTTWorker")
 
         client_id = self.config.get("MQTT_CLIENT_ID", "dronecot")
         topic = self.config.get("MQTT_TOPIC", dronecot.DEFAULT_MQTT_TOPIC)
         broker = self.config.get("MQTT_BROKER", dronecot.DEFAULT_MQTT_BROKER)
-        port = self.config.get("MQTT_PORT", dronecot.DEFAULT_MQTT_PORT)
+        port = int(self.config.get("MQTT_PORT", dronecot.DEFAULT_MQTT_PORT))
         mqtt_username = self.config.get("MQTT_USERNAME")
         mqtt_password = self.config.get("MQTT_PASSWORD")
+
+        if self.config.get("PYTAK_TLS_CLIENT_CERT"):
+            ssl_ctx = pytak.client_functions.get_ssl_ctx(self.config)
 
         async with aiomqtt.Client(
             hostname=broker,
             port=port,
-            username=mqtt_username,
-            password=mqtt_password,
+            username=mqtt_username or None,
+            password=mqtt_password or None,
             client_id=client_id,
+            tls_context=ssl_ctx or None,
         ) as client:
             self._logger.info("Connected to MQTT Broker %s:%d/%s", broker, port, topic)
             async with client.messages() as messages:
@@ -123,7 +157,7 @@ class RIDWorker(pytak.QueueWorker):
         self.config = config
 
     async def handle_data(self, data: dict) -> None:
-        """Handle Data from ADS-B receiver: Render to CoT, put on TX queue.
+        """Handle Data from receiver: Render to CoT, put on TX queue.
 
         Parameters
         ----------
@@ -146,7 +180,7 @@ class RIDWorker(pytak.QueueWorker):
 
     async def run(self, _=-1) -> None:
         """Run the main process loop."""
-        self._logger.info("Run: RIDWorker")
+        self._logger.info("Running RIDWorker")
 
         while 1:
             data = await self.net_queue.get()

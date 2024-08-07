@@ -27,6 +27,7 @@ try:
         DEFAULT_MQTT_PORT,
         DEFAULT_MQTT_TOPIC,
         DEFAULT_GPS_INFO_CMD,
+        DEFAULT_SENSOR_COT_TYPE,
     )
     from .functions import (  # NOQA
         xml_to_cot,

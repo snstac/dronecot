@@ -22,3 +22,4 @@ DEFAULT_MQTT_BROKER: str = "localhost"
 DEFAULT_MQTT_PORT: int = 1883
 DEFAULT_MQTT_TOPIC: str = "#"
 DEFAULT_GPS_INFO_CMD: str = "gpspipe --json -n 5"
+DEFAULT_SENSOR_COT_TYPE: str = "a-f-G-E-S-E"

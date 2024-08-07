@@ -122,10 +122,10 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
     config = config or {}
     remarks_fields: list = []
 
-    op_id = data.get("OperatorID", "Unknown-OperatorID")
-    uasid = data.get("BasicID_0", "Unknown-BasicID_0")
+    uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
+    op_id = data.get("OperatorID", uasid)
 
-    cot_uid: str = f"RID.{op_id}"
+    cot_uid: str = f"RID.{uasid}.op"
     cot_type: str = "a-n-G"
 
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
@@ -205,11 +205,11 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     config = config or {}
     remarks_fields: list = []
 
-    op_id = data.get("OperatorID", "Unknown-OperatorID")
-    uasid = data.get("BasicID_0", "Unknown-BasicID_0")
+    uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
+    op_id = data.get("OperatorID", uasid)
 
-    cot_uid: str = f"RID.{uasid}"
-    cot_type: str = "a-n-A-M-F-Q"
+    cot_uid: str = f"RID.{uasid}.uas"
+    cot_type: str = "a-n-A-M-H-Q"
 
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
@@ -274,9 +274,10 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
 ) -> Optional[ET.Element]:
     """Serialize sensor status data s Cursor on Target."""
     config = config or {}
-    lat = config.get("SENSOR_LAT")
-    lon = config.get("SENSOR_LON")
-    alt = config.get("SENSOR_ALT", "9999999.0")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    hae = data.get("altHAE")
+    status = data.get("status") or {}
 
     if lat is None or lon is None:
         gps_info = get_gps_info(config)
@@ -291,10 +292,10 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     config = config or {}
     remarks_fields: list = []
 
-    sensor_id = config.get("SENSOR_ID", "Unknown-SENSOR_ID")
+    sensor_id = config.get("SENSOR_ID", status.get("sensor ID"))
 
-    cot_uid: str = f"CUAS.{sensor_id}"
-    cot_type: str = "a-f-G-E-S"
+    cot_uid: str = f"SNSTAC-CUAS.{sensor_id}"
+    cot_type: str = config.get("SENSOR_COT_TYPE", dronecot.DEFAULT_SENSOR_COT_TYPE)
 
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
@@ -302,7 +303,9 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     cotx = ET.Element("_dronecot_")
     cotx.set("cot_host_id", cot_host_id)
 
-    remarks_fields.append(f"C-UAS Sensor {sensor_id}")
+    remarks_fields.append(
+        f"SNSTAC C-UAS Sensor {sensor_id} - {status.get('model')} {status.get('status')} - Contact: info@snstac.com 415-598-8226"
+    )
     cotx.set("sensor_id", sensor_id)
     callsign = sensor_id
 
@@ -328,7 +331,7 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
         "lon": str(lon),
         "ce": str(data.get("HorizAccuracy", "9999999.0")),
         "le": str(data.get("VertAccuracy", "9999999.0")),
-        "hae": str(data.get("AltitudeGeo", "9999999.0")),
+        "hae": hae,
         "uid": cot_uid,
         "cot_type": cot_type,
         "stale": cot_stale,
