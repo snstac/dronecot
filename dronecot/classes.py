@@ -129,7 +129,8 @@ class MQTTWorker(pytak.QueueWorker):
         mqtt_username = self.config.get("MQTT_USERNAME")
         mqtt_password = self.config.get("MQTT_PASSWORD")
 
-        if self.config.get("PYTAK_TLS_CLIENT_CERT"):
+        ssl_ctx = None
+        if self.config.get("MQTT_TLS_CLIENT_CERT"):
             ssl_ctx = pytak.client_functions.get_ssl_ctx(self.config)
 
         async with aiomqtt.Client(
@@ -138,7 +139,7 @@ class MQTTWorker(pytak.QueueWorker):
             username=mqtt_username or None,
             password=mqtt_password or None,
             client_id=client_id,
-            tls_context=ssl_ctx or None,
+            tls_context=ssl_ctx,
         ) as client:
             self._logger.info("Connected to MQTT Broker %s:%d/%s", broker, port, topic)
             async with client.messages() as messages:
