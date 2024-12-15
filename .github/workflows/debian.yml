@@ -12,7 +12,7 @@ jobs:
   build-artifact:
     runs-on: ubuntu-20.04
     permissions: write-all
-
+      
     steps:
       - uses: actions/checkout@master
 
