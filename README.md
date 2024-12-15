@@ -1,21 +1,24 @@
-.. image:: https://adsbxcot.readthedocs.io/en/latest/atak_screenshot_with_pytak_logo-x25.png
-   :alt: ATAK screenshot with PyTAK logo.
+![ATAK screenshot with PyTAK logo](https://adsbxcot.readthedocs.io/en/latest/atak_screenshot_with_pytak_logo-x25.png)
+# DroneCOT - Display Drones in TAK
 
-Display Drones in TAK 
-*********************
+## Features
 
-DroneCOT is software for monitoring and analyzing Direct Remote Identification (DRI), Remote ID (RID) or Open Drone ID (ODID) broadcasts from Uncrewed Aircraft (UA) via the Team Awareness Kit (TAK) ecosystem of products.
+- Monitor and analyze Remote ID (RID), Direct Remote Identification (DRI), or Open Drone ID (ODID) broadcasts from Uncrewed Aircraft (UA, UAV, UAS).
+- Integrate with the Team Awareness Kit (TAK) ecosystem.
+- Capture and report real-time drone data using native TAK protocols, including Cursor on Target (CoT).
+- Compatible with WinTAK, iTAK, ATAK, and TAK Server.
 
-DroneCOT captures & reports real-time data received from drones into TAK products using native TAK protocols, including Cursor on Target (CoT). 
+## Getting Started
 
-DroneCOT has been evaluated with WinTAK, iTAK, ATAK & TAK Server.
+To get started with DroneCOT, follow the [documentation](https://dronecot.rtfd.io) for installation and usage instructions.
 
-`Documentation is available here. <https://dronecot.rtfd.io>`_
+## Contact
 
-License
-=======
+For more information, visit our [website](https://www.snstac.com) or contact us at info@snstac.com.
 
-## DroneCOT
+## License
+
+### DroneCOT
 
 Copyright Sensors & Signals LLC https://www.snstac.com
 
@@ -29,7 +32,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-## open_drone_id.py 
+### open_drone_id.py
 
 Copyright (c) 2022 BlueMark Innovations BV
 
