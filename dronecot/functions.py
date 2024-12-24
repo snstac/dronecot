@@ -20,7 +20,7 @@
 
 import asyncio
 import json
-import os
+import subprocess
 import xml.etree.ElementTree as ET
 
 from configparser import SectionProxy
@@ -364,9 +364,13 @@ def get_gps_info(config) -> Optional[dict]:
     gpspipe_data: Optional[str] = None
     gps_data: Optional[str] = None
     gps_info_cmd = config.get("GPS_INFO_CMD", dronecot.DEFAULT_GPS_INFO_CMD)
-
-    with os.popen(gps_info_cmd) as gps_info_cmd:
-        gpspipe_data = gps_info_cmd.read()
+    try:
+        gpspipe_data = subprocess.check_output(
+            gps_info_cmd, shell=True, timeout=10
+        ).decode()
+    except subprocess.TimeoutExpired:
+        print("Unable to get GPS fix, ignoring.")
+        return None
 
     if not gpspipe_data:
         return None
