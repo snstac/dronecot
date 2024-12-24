@@ -23,9 +23,8 @@ import json
 
 from typing import Optional
 
-import asyncio_mqtt as aiomqtt
-from bitstruct import *
 import lzma
+import asyncio_mqtt as aiomqtt
 
 import pytak
 import dronecot
@@ -55,6 +54,8 @@ class MQTTWorker(pytak.QueueWorker):
             # remove \0 char as it will prevent decoding of json
             if ord(payload[-1:]) == 0:
                 payload = payload[:-1]
+
+        self._logger.debug("Message payload: %s", payload)
 
         position = 0
         while position != -1:
@@ -145,6 +146,7 @@ class MQTTWorker(pytak.QueueWorker):
             async with client.messages() as messages:
                 await client.subscribe(topic)
                 async for message in messages:
+                    self._logger.debug("Received message: %s", message)
                     await self.parse_message(message)
 
 
@@ -165,7 +167,7 @@ class RIDWorker(pytak.QueueWorker):
         data : `list[dict, ]`
             List of craft data as key/value arrays.
         """
-        # self._logger.info(data)
+        self._logger.debug("Handling data: %s", data)
         if "status" in data:
             event = dronecot.xml_to_cot(data, self.config, "sensor_status_to_cot")
             await self.put_queue(event)
@@ -186,7 +188,6 @@ class RIDWorker(pytak.QueueWorker):
         while 1:
             data = await self.net_queue.get()
             if not data:
-                # await asyncio.sleep(0.01)
                 continue
 
             await self.handle_data(data)

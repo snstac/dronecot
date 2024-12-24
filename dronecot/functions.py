@@ -272,7 +272,7 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     data: dict,
     config: Union[SectionProxy, dict, None] = None,
 ) -> Optional[ET.Element]:
-    """Serialize sensor status data s Cursor on Target."""
+    """Serialize sensor status data as Cursor on Target."""
     config = config or {}
     lat = data.get("lat")
     lon = data.get("lon")
@@ -304,7 +304,8 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     cotx.set("cot_host_id", cot_host_id)
 
     remarks_fields.append(
-        f"SNSTAC C-UAS Sensor {sensor_id} - {status.get('model')} {status.get('status')} - Contact: info@snstac.com 415-598-8226"
+        f"SNSTAC C-UAS Sensor {sensor_id} - {status.get('model')} "
+        f"{status.get('status')} - Contact: info@snstac.com 415-598-8226"
     )
     cotx.set("sensor_id", sensor_id)
     callsign = sensor_id
@@ -351,7 +352,7 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
 def xml_to_cot(
     data: dict, config: Union[SectionProxy, dict, None] = None, func=None
 ) -> Optional[bytes]:
-    """Return CoT XML object as an XML string."""
+    """Return a CoT XML object as an XML string, using the given func."""
     cot: Optional[ET.Element] = getattr(dronecot.functions, func)(data, config)
     return (
         b"\n".join([pytak.DEFAULT_XML_DECLARATION, ET.tostring(cot)]) if cot else None
