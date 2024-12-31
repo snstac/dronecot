@@ -132,10 +132,6 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def handle_sensor_data(self, message: dict):
         """Process decoded data from the sensor."""
-        if os.getenv("DEBUG"):
-            with open("messages.json", "a") as f:
-                json.dump(message, f)
-
         protocol = message.get("protocol")
         if not protocol or str(protocol) != "1.0":
             return
