@@ -17,12 +17,15 @@
 """DroneCOT Function Tests."""
 
 import json
+import os
 import random
 import unittest
 
 import xml.etree.ElementTree as ET
 
 import dronecot
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_random_test_data(file_path):
@@ -55,7 +58,7 @@ def load_sample_data(file_path, line=0):
     json_obj = None
     topic = "test"
 
-    with open(file_path, "r", encoding="utf-8") as file:
+    with open(f"{THIS_DIR}/{file_path}", "r", encoding="utf-8") as file:
         _payload = file.readlines()
         payload = _payload[line]
 
