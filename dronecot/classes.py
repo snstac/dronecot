@@ -20,8 +20,9 @@
 
 import base64
 import json
+import os
 
-from typing import Optional
+from typing import Optional, Union
 
 import lzma
 import asyncio_mqtt as aiomqtt
@@ -38,43 +39,79 @@ class MQTTWorker(pytak.QueueWorker):
         super().__init__(queue, config)
         self.sensor_positions = {}
 
-    async def parse_message(self, message):
+    async def handle_data(self, data: Union[dict, aiomqtt.Message]) -> None:
+        """Handle Open Drone ID message from MQTT.
+
+        Parameters
+        ----------
+        data : `list[dict, aiomqtt.Message]`
+            List of craft data as key/value arrays.
+        """
+        self._logger.debug("Handling data: %s", data)
+        if isinstance(data, aiomqtt.Message):
+            await self.parse_message(data)
+
+    async def parse_message(self, message: aiomqtt.Message):
         """Parse Open Drone ID message from MQTT."""
         topic = message.topic.value
         self._logger.debug("Message topic: %s", topic)
+
+        _payload = message.payload
+        if not isinstance(_payload, bytes):
+            return
+
+        payload = await self.decode_payload(_payload)
+        if not payload:
+            self._logger.error("Failed to decode message payload")
+            return
+
+        await self.process_payload(payload, topic)
+
+    async def decode_payload(self, payload: bytes) -> Optional[str]:
+        """Decode the MQTT message payload, which could be either plain JSON or LZMA compressed JSON."""
+        _payload = None
+
         try:
-            # not compressed
-            payload = message.payload.decode()
-            # remove newline (\n) char or \0 char as it will prevent decoding of json
-            if ord(payload[-1:]) == 0 or ord(payload[-1:]) == 10:
-                payload = payload[:-1]
+            # Not compressed
+            _payload = payload.decode()
+            # Remove newline (\n) char or \0 char as it will prevent decoding of JSON
+            if ord(payload[-1:]) in {0, 10}:
+                _payload = _payload[:-1]
         except (UnicodeDecodeError, AttributeError):
-            # lzma compressed
-            payload = lzma.decompress(message.payload).decode()
-            # remove \0 char as it will prevent decoding of json
-            if ord(payload[-1:]) == 0:
-                payload = payload[:-1]
+            # LZMA compressed
+            try:
+                _payload = lzma.decompress(payload).decode()
+            except lzma.LZMAError as e:
+                self._logger.error("LZMA decompression error: %s", e)
+                return None
+            # Remove \0 char as it will prevent decoding of JSON
+            if ord(_payload[-1:]) == 0:
+                _payload = _payload[:-1]
 
-        self._logger.debug("Message payload: %s", payload)
+        return _payload
 
-        position = 0
-        while position != -1:
-            position = payload.find("}{")
-            if position == -1:
-                json_obj = json.loads(payload)
-            else:
-                message_payload = payload[0 : position + 1]
-                payload = payload[position + 1 :]
-                json_obj = json.loads(message_payload)
+    async def process_payload(self, payload: str, topic: str) -> None:
+        """Process the payload into individual JSON objects and handle them."""
+        json_end_position = 0
+        while json_end_position != -1:
+            message_payload = payload
 
-            if "position" in topic:
-                json_obj["topic"] = topic
+            # Look for the next JSON object in the payload, which is (sometimes)
+            # separated by "}{". If found, split the payload at that position.
+            json_end_position = payload.find("}{")
+            if json_end_position != -1:
+                message_payload = payload[0 : json_end_position + 1]
+                # Start payload over at the next JSON object
+                payload = payload[json_end_position + 1 :]
+
+            json_obj = json.loads(message_payload)
+            json_obj["topic"] = topic
+
+            if json_obj.get("position"):
                 await self.handle_sensor_position(json_obj)
             elif json_obj.get("data"):
-                json_obj["topic"] = topic
                 await self.handle_sensor_data(json_obj)
             elif json_obj.get("status"):
-                json_obj["topic"] = topic
                 await self.handle_sensor_status(json_obj)
 
     async def handle_sensor_position(self, message):
@@ -82,6 +119,7 @@ class MQTTWorker(pytak.QueueWorker):
         topic = message.get("topic")
         sensor = topic.split("/")[2]
         self.sensor_positions[sensor] = {
+            "sensor ID": sensor,
             "lat": message.get("lat"),
             "lon": message.get("lon"),
             "altHAE": message.get("altHAE"),
@@ -92,9 +130,16 @@ class MQTTWorker(pytak.QueueWorker):
             "speed": message.get("speed"),
         }
 
-    async def handle_sensor_data(self, message):
+    async def handle_sensor_data(self, message: dict):
         """Process decoded data from the sensor."""
-        data = message.get("data")
+        if os.getenv("DEBUG"):
+            with open("messages.json", "a") as f:
+                json.dump(message, f)
+
+        protocol = message.get("protocol")
+        if not protocol or str(protocol) != "1.0":
+            return
+        data = message.get("data", {})
         uasdata = data.get("UASdata")
         if not uasdata:
             return
@@ -103,9 +148,12 @@ class MQTTWorker(pytak.QueueWorker):
 
         valid_blocks = dronecot.decode_valid_blocks(uasdata, dronecot.ODIDValidBlocks())
         pl = dronecot.parse_payload(uasdata, valid_blocks)
+        del data["UASdata"]
+        pl["data"] = data
+        pl["topic"] = message["topic"]
         await self.put_queue(pl)
 
-    async def handle_sensor_status(self, message):
+    async def handle_sensor_status(self, message: dict):
         """Process sensor status messages."""
         status = message.get("status")
         if not status:
@@ -116,6 +164,7 @@ class MQTTWorker(pytak.QueueWorker):
 
         position = self.sensor_positions.get(sensor) or {}
         pl = position | message
+        pl["sensor ID"] = sensor
         self._logger.info("Publishing status for sensor: %s", sensor)
         await self.put_queue(pl)
 
@@ -146,8 +195,8 @@ class MQTTWorker(pytak.QueueWorker):
             async with client.messages() as messages:
                 await client.subscribe(topic)
                 async for message in messages:
-                    self._logger.debug("Received message: %s", message)
-                    await self.parse_message(message)
+                    self._logger.debug("Received MQTT message: %s", message)
+                    await self.handle_data(message)
 
 
 class RIDWorker(pytak.QueueWorker):
@@ -168,7 +217,8 @@ class RIDWorker(pytak.QueueWorker):
             List of craft data as key/value arrays.
         """
         self._logger.debug("Handling data: %s", data)
-        if "status" in data:
+
+        if "status" in data and "position" not in data.get("topic", ""):
             event = dronecot.xml_to_cot(data, self.config, "sensor_status_to_cot")
             await self.put_queue(event)
         else:

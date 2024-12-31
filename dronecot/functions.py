@@ -19,6 +19,7 @@
 """DroneCOT Functions."""
 
 import asyncio
+import base64
 import json
 import subprocess
 import xml.etree.ElementTree as ET
@@ -204,9 +205,11 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
 
     config = config or {}
     remarks_fields: list = []
+    src_data = data.get("data", {})
 
     uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
     op_id = data.get("OperatorID", uasid)
+    op_uid = f"RID.{op_id}.op"
 
     cot_uid: str = f"RID.{uasid}.uas"
     cot_type: str = "a-n-A-M-H-Q"
@@ -214,11 +217,9 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
 
-    cotx = ET.Element("_dronecot_")
-    cotx.set("cot_host_id", cot_host_id)
+    remarks_fields.append(f"UAS: {uasid}")
+    remarks_fields.append(f"Operator: {op_id}")
 
-    remarks_fields.append(f"OperatorID={op_id}")
-    cotx.set("OperatorID", op_id)
     callsign = uasid
 
     contact: ET.Element = ET.Element("contact")
@@ -228,17 +229,31 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     track.set("speed", str(data.get("SpeedHorizontal", 0)))
 
     link: ET.Element = ET.Element("link")
-    link.set("uid", op_id)
+    link.set("uid", op_uid)
     link.set("production_time", pytak.cot_time())
     link.set("type", "a-n-G")
     link.set("parent_callsign", op_id)
     link.set("relation", "p-p")
 
+    cuas: ET.Element = ET.Element("__cuas")
+    sensor_id = src_data.get(
+        "sensor ID", src_data.get("sensor_id", dronecot.DEFAULT_SENSOR_ID)
+    )
+    cuas.set("sensor_id", sensor_id)
+    cuas.set("rssi", str(src_data.get("RSSI")))
+    cuas.set("channel", str(src_data.get("channel")))
+    cuas.set("timestamp", str(src_data.get("timestamp")))
+    cuas.set("mac_address", str(src_data.get("MAC address")))
+    cuas.set("type", str(src_data.get("type", dronecot.DEFAULT_SENSOR_PAYLOAD_TYPE)))
+    cuas.set("host_id", cot_host_id)
+    cuas.set("rid_op", op_id)
+    cuas.set("rid_uas", uasid)
+
     detail = ET.Element("detail")
     detail.append(contact)
     detail.append(track)
-    detail.append(cotx)
     detail.append(link)
+    detail.append(cuas)
 
     remarks = ET.Element("remarks")
     remarks_fields.append(f"{cot_host_id}")
@@ -280,10 +295,12 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     status = data.get("status") or {}
 
     if lat is None or lon is None:
-        gps_info = get_gps_info(config)
-        if gps_info:
-            print(gps_info)
-        else:
+        gps_info = None
+        try:
+            gps_info = get_gps_info(config)
+        except Exception as e:
+            print(f"Unable to get GPS fix: {e}")
+        if not gps_info:
             return None
 
     if lat is None or lon is None:
@@ -292,7 +309,9 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     config = config or {}
     remarks_fields: list = []
 
-    sensor_id = config.get("SENSOR_ID", status.get("sensor ID"))
+    sensor_id = data.get(
+        "sensor ID", config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID)
+    )
 
     cot_uid: str = f"SNSTAC-CUAS.{sensor_id}"
     cot_type: str = config.get("SENSOR_COT_TYPE", dronecot.DEFAULT_SENSOR_COT_TYPE)
@@ -386,3 +405,27 @@ def get_gps_info(config) -> Optional[dict]:
 
     gps_info = json.loads(gps_data)
     return gps_info
+
+
+def parse_sensor_data(data):
+    """Process decoded data from the sensor."""
+    message = data
+    protocol = message.get("protocol")
+    if not protocol or str(protocol) != "1.0":
+        return
+
+    data = message.get("data")
+    uasdata = data.get("UASdata")
+    if not uasdata:
+        return
+
+    uasdata = base64.b64decode(uasdata)
+    valid_blocks = dronecot.decode_valid_blocks(uasdata, dronecot.ODIDValidBlocks())
+
+    pl = dronecot.parse_payload(uasdata, valid_blocks)
+
+    # del data["UASdata"]
+    pl["data"] = data
+    pl["topic"] = message["topic"]
+
+    return pl

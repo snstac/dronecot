@@ -26,6 +26,7 @@ User=dronecot
 ExecStart=/usr/bin/dronecot
 RuntimeDirectory=dronecot
 SyslogIdentifier=dronecot
+EnvironmentFile=/etc/aryaos/aryaos-config.txt
 EnvironmentFile=/etc/default/dronecot
 Type=simple
 Restart=always
