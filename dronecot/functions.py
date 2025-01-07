@@ -237,7 +237,7 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
 
     cuas: ET.Element = ET.Element("__cuas")
     sensor_id = src_data.get(
-        "sensor ID", src_data.get("sensor_id", dronecot.DEFAULT_SENSOR_ID)
+        "sensor_id", src_data.get("sensor_id", dronecot.DEFAULT_SENSOR_ID)
     )
     cuas.set("sensor_id", sensor_id)
     cuas.set("rssi", str(src_data.get("RSSI")))
@@ -310,7 +310,7 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     remarks_fields: list = []
 
     sensor_id = data.get(
-        "sensor ID", config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID)
+        "sensor_id", config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID)
     )
 
     cot_uid: str = f"SNSTAC-CUAS.{sensor_id}"

@@ -96,7 +96,7 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def process_payload(self, payload: str, topic: str) -> None:
         """Process the payload into individual JSON objects and handle them."""
-        self._logger.debug("Processing topic: %s payload: %s", topic, payload)
+        self._logger.debug("Processing payload (%s): %s", topic, payload)
         json_end_position = 0
         while json_end_position != -1:
             message_payload = payload
@@ -112,7 +112,7 @@ class MQTTWorker(pytak.QueueWorker):
             json_obj = json.loads(message_payload)
             json_obj["topic"] = topic
 
-            if json_obj.get("position"):
+            if "position" in topic:
                 await self.handle_sensor_position(json_obj)
             elif json_obj.get("data"):
                 await self.handle_sensor_data(json_obj)
@@ -125,7 +125,7 @@ class MQTTWorker(pytak.QueueWorker):
         topic = message.get("topic")
         sensor = topic.split("/")[2]
         self.sensor_positions[sensor] = {
-            "sensor ID": sensor,
+            "sensor_id": sensor,
             "lat": message.get("lat"),
             "lon": message.get("lon"),
             "altHAE": message.get("altHAE"),
@@ -178,8 +178,10 @@ class MQTTWorker(pytak.QueueWorker):
 
         position = self.sensor_positions.get(sensor) or {}
         pl = position | message
-        pl["sensor ID"] = sensor
+        del pl["topic"]
+        pl["sensor_id"] = sensor
         self._logger.info("Publishing status for sensor: %s", sensor)
+        self._logger.debug("Status: %s", pl)
         await self.put_queue(pl)
 
     async def run(self, _=-1) -> None:
