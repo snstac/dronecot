@@ -20,7 +20,6 @@
 
 import base64
 import json
-import os
 
 from typing import Optional, Union
 
@@ -50,14 +49,19 @@ class MQTTWorker(pytak.QueueWorker):
         self._logger.debug("Handling data: %s", data)
         if isinstance(data, aiomqtt.Message):
             await self.parse_message(data)
+        else:
+            self._logger.error("Received unexpected data type: %s", type(data))
 
     async def parse_message(self, message: aiomqtt.Message):
         """Parse Open Drone ID message from MQTT."""
+        self._logger.debug("Parsing message: %s", message)
+
         topic = message.topic.value
         self._logger.debug("Message topic: %s", topic)
 
         _payload = message.payload
         if not isinstance(_payload, bytes):
+            self._logger.error("Message contained no bytes payload.")
             return
 
         payload = await self.decode_payload(_payload)
@@ -92,6 +96,7 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def process_payload(self, payload: str, topic: str) -> None:
         """Process the payload into individual JSON objects and handle them."""
+        self._logger.debug("Processing topic: %s payload: %s", topic, payload)
         json_end_position = 0
         while json_end_position != -1:
             message_payload = payload
@@ -116,6 +121,7 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def handle_sensor_position(self, message):
         """Process sensor position messages."""
+        self._logger.debug("Handling sensor position message: %s", message)
         topic = message.get("topic")
         sensor = topic.split("/")[2]
         self.sensor_positions[sensor] = {
@@ -132,12 +138,21 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def handle_sensor_data(self, message: dict):
         """Process decoded data from the sensor."""
+        self._logger.debug("Handling sensor data message: %s", message)
+
         protocol = message.get("protocol")
         if not protocol or str(protocol) != "1.0":
+            self._logger.error("Unsupported protocol: %s", protocol)
             return
+
         data = message.get("data", {})
+        if not data:
+            self._logger.error("No data in message")
+            return
+
         uasdata = data.get("UASdata")
         if not uasdata:
+            self._logger.error("No UASdata in message")
             return
 
         uasdata = base64.b64decode(uasdata)
@@ -151,8 +166,11 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def handle_sensor_status(self, message: dict):
         """Process sensor status messages."""
+        self._logger.debug("Handling sensor status message: %s", message)
+
         status = message.get("status")
         if not status:
+            self._logger.error("No status in message")
             return
 
         topic = message["topic"]
