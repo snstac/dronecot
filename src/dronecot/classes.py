@@ -21,6 +21,7 @@
 import base64
 import json
 
+from socket import socket
 from typing import Optional, Union
 
 import lzma
@@ -162,6 +163,7 @@ class MQTTWorker(pytak.QueueWorker):
         del data["UASdata"]
         pl["data"] = data
         pl["topic"] = message["topic"]
+        pl["extra"] = message.get("extra", {})
         await self.put_queue(pl)
 
     async def handle_sensor_status(self, message: dict):
@@ -188,7 +190,9 @@ class MQTTWorker(pytak.QueueWorker):
         """Run this Thread, Reads from Pollers."""
         self._logger.info("Running MQTTWorker")
 
-        client_id = self.config.get("MQTT_CLIENT_ID", "dronecot")
+        # This must be unique per client, so use the sensor ID
+        client_id = self.config.get("MQTT_CLIENT_ID", dronecot.DEFAULT_SENSOR_ID)
+
         topic = self.config.get("MQTT_TOPIC", dronecot.DEFAULT_MQTT_TOPIC)
         broker = self.config.get("MQTT_BROKER", dronecot.DEFAULT_MQTT_BROKER)
         port = int(self.config.get("MQTT_PORT", dronecot.DEFAULT_MQTT_PORT))
@@ -238,20 +242,17 @@ class RIDWorker(pytak.QueueWorker):
             event = dronecot.xml_to_cot(data, self.config, "sensor_status_to_cot")
             await self.put_queue(event)
         else:
-            uas_event: Optional[bytes] = dronecot.xml_to_cot(
-                data, self.config, "rid_uas_to_cot_xml"
-            )
-            op_event: Optional[bytes] = dronecot.xml_to_cot(
-                data, self.config, "rid_op_to_cot_xml"
-            )
-            await self.put_queue(uas_event)
-            await self.put_queue(op_event)
+            cot_funcs = ["rid_uas_to_cot_xml", "rid_op_to_cot_xml"]
+            for func in cot_funcs:
+                event = dronecot.cot_to_xml(data, self.config, func)
+                print(event)
+                await self.put_queue(event)
 
     async def run(self, _=-1) -> None:
         """Run the main process loop."""
         self._logger.info("Running RIDWorker")
 
-        while 1:
+        while True:
             data = await self.net_queue.get()
             if not data:
                 continue

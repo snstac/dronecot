@@ -127,12 +127,12 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
     op_id = data.get("OperatorID", uasid)
 
     cot_uid: str = f"RID.{uasid}.op"
-    cot_type: str = "a-n-G"
+    cot_type: str = config.get("OP_COT_TYPE", dronecot.DEFAULT_OP_COT_TYPE)
 
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
 
-    cotx = ET.Element("_dronecot_")
+    cotx = ET.Element("__cuas")
     cotx.set("cot_host_id", cot_host_id)
 
     remarks_fields.append(f"UAS ID={uasid} OperatorID={op_id}")
@@ -207,12 +207,26 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     remarks_fields: list = []
     src_data = data.get("data", {})
 
+    extra_json = data.get("extra", {})
+    if len(extra_json) > 0:
+       if extra_json.get('SN present') == 1:
+            print("extra")
+            print("SN valid......",  extra_json.get('SN valid'))
+            print("manufacturer......",  extra_json.get('manufacturer'))
+            print("model......",  extra_json.get('model'))
+            print("type......",  extra_json.get('type'))
+            print("application......",  extra_json.get('application'))
+            print("weight mtow [kg]......",  extra_json.get('weight'))
+            print("dimensions [mm]......",  extra_json.get('dimensions'))
+            print("")
+
+
     uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
     op_id = data.get("OperatorID", uasid)
     op_uid = f"RID.{op_id}.op"
 
     cot_uid: str = f"RID.{uasid}.uas"
-    cot_type: str = "a-n-A-M-H-Q"
+    cot_type: str = config.get("UAS_COT_TYPE", dronecot.DEFAULT_UAS_COT_TYPE)
 
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
