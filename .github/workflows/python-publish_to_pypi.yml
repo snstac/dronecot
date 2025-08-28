@@ -9,7 +9,7 @@ on:
 jobs:
   deploy:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
