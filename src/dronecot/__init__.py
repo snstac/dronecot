@@ -34,6 +34,7 @@ from .constants import (  # NOQA
 
 from .functions import (  # NOQA
     xml_to_cot,
+    cot_to_xml,
     create_tasks,
 )
 
