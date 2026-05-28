@@ -47,3 +47,52 @@ WantedBy=default.target
 ```
 
 > Pay special attention to the `ExecStart` line above. You'll need to provide the full local filesystem path to both your dronecot executable & dronecot configuration files.
+
+## Run Side-by-Side with user systemd instances
+
+Use the templated user unit at `systemd/user/dronecot@.service` to run multiple
+DroneCOT processes on one server (for example one MQTT feed and one serial feed).
+
+1. Install the user unit template:
+   - `mkdir -p ~/.config/systemd/user`
+   - `cp systemd/user/dronecot@.service ~/.config/systemd/user/`
+2. Create optional shared defaults:
+   - `mkdir -p ~/.config/dronecot`
+   - `nano ~/.config/dronecot/defaults`
+3. Create per-instance defaults files:
+   - `nano ~/.config/dronecot/mqtt.env`
+   - `nano ~/.config/dronecot/serial.env`
+4. Reload and start both instances:
+   - `systemctl --user daemon-reload`
+   - `systemctl --user enable --now dronecot@mqtt dronecot@serial`
+5. Check logs:
+   - `journalctl --user -fu dronecot@mqtt`
+   - `journalctl --user -fu dronecot@serial`
+
+The unit loads defaults files in this order (later files override earlier values):
+
+1. `/etc/default/dronecot` (optional shared system defaults)
+2. `/etc/default/dronecot.%i` (optional system instance defaults)
+3. `~/.config/dronecot/defaults` (optional shared user defaults)
+4. `~/.config/dronecot/%i.env` (optional user instance defaults)
+
+The unit prefers a virtualenv install if available at
+`$HOME/work/SNS/dronecot/.venv/bin/dronecot`.
+You can override this path with `DRONECOT_BIN=/path/to/dronecot` in any defaults file.
+
+### Example `~/.config/dronecot/mqtt.env`
+
+```bash
+FEED_URL=mqtt://broker.example.net:1883
+MQTT_TOPIC=#
+COT_URL=udp+wo://239.2.3.1:6969
+DEBUG=1
+```
+
+### Example `~/.config/dronecot/serial.env`
+
+```bash
+FEED_URL=serial:///dev/ttyACM1:115200
+COT_URL=udp+wo://239.2.3.1:6969
+DEBUG=1
+```

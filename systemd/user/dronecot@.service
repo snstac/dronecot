@@ -1,0 +1,32 @@
+[Unit]
+Description=DroneCOT instance (%i)
+Documentation=https://dronecot.rtfd.io
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+SyslogIdentifier=dronecot-%i
+Environment=DRONECOT_WORKDIR=%h/work/SNS/dronecot
+
+# Shared defaults (optional), then instance-specific overrides.
+EnvironmentFile=-/etc/default/dronecot
+EnvironmentFile=-/etc/default/dronecot.%i
+EnvironmentFile=-%h/.config/dronecot/defaults
+EnvironmentFile=-%h/.config/dronecot/%i.env
+
+# Keep per-instance logs in runtime dir (created by systemd).
+RuntimeDirectory=dronecot
+RuntimeDirectoryMode=0755
+StandardOutput=append:%t/dronecot/%i.log
+StandardError=append:%t/dronecot/%i.log
+
+ExecStart=/bin/bash -lc 'cd "${DRONECOT_WORKDIR}" 2>/dev/null || true; BIN="${DRONECOT_BIN:-${DRONECOT_WORKDIR}/.venv/bin/dronecot}"; if [ -x "$BIN" ]; then exec "$BIN"; elif command -v dronecot >/dev/null 2>&1; then exec "$(command -v dronecot)"; else exec /usr/bin/dronecot; fi'
+Restart=always
+RestartSec=20
+StartLimitInterval=1
+StartLimitBurst=100
+RestartPreventExitStatus=64
+
+[Install]
+WantedBy=default.target

@@ -14,6 +14,31 @@
 # limitations under the License.
 #
 
+.POSIX:
+
+PYTHON := python3
+VENV   := .venv
+PY     := $(VENV)/bin/python3
+PIP    := $(VENV)/bin/pip
+
+# rsync: push this tree to the same path on a remote host (override as needed)
+RSYNC_HOST  ?= beast
+RSYNC_PATH  ?= $(CURDIR)
+
+.PHONY: help venv virtualenv install setup run verify rsync install_user_systemd
+
+help:
+	@echo "Targets:"
+	@echo "  make venv         Create $(VENV) with $(PYTHON)"
+	@echo "  make virtualenv   same as venv"
+	@echo "  make install      pip install -r requirements.txt (uses $(VENV))"
+	@echo "  make setup        venv + install"
+	@echo "  make verify       import-check pymavlink + bitstruct with $(PY)"
+	@echo "  make run          run main.py with $(PY) (prefer this over bare: python main.py)"
+	@echo "  make rsync        rsync project to $(RSYNC_HOST):$(RSYNC_PATH)/ (excludes .venv)"
+	@echo "  make install_user_systemd install user systemd template unit"
+
+
 REPO_NAME ?= $(shell echo $(wildcard src/*/__init__.py) | awk -F'/' '{print $$2}')
 SHELL := /bin/bash
 .DEFAULT_GOAL := editable
@@ -101,3 +126,21 @@ package: bdist_deb faux_latest
 extract: 
 	dpkg-deb -e $(wildcard deb_dist/*latest_all.deb) deb_dist/extract
 	dpkg-deb -x $(wildcard deb_dist/*latest_all.deb) deb_dist/extract
+
+venv:
+	$(PYTHON) -m venv $(VENV)
+
+virtualenv: venv
+
+rsync:
+	rsync -avz -e 'ssh -i ~/.ssh/id_ed25519_nopass' --exclude='.venv' --exclude='__pycache__' --exclude='config.py' $(CURDIR)/ $(RSYNC_HOST):$(RSYNC_PATH)/
+
+install_user_systemd:
+	mkdir -p $$HOME/.config/systemd/user
+	install -m 0644 systemd/user/dronecot@.service $$HOME/.config/systemd/user/dronecot@.service
+	systemctl --user daemon-reload
+	@echo "Installed: $$HOME/.config/systemd/user/dronecot@.service"
+	@echo "Next: systemctl --user enable --now dronecot@mqtt dronecot@serial"
+
+$(VENV)/bin/pip $(VENV)/bin/python3:
+	$(PYTHON) -m venv $(VENV)

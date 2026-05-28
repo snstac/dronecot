@@ -1,0 +1,10 @@
+{
+    "protocol": 1.0,
+    "data": {
+        "sensor ID": "test_sensor_id_001",
+        "timestamp": 1735677525000,
+        "firmware version": "20220509-1035",
+        "model": "ds230",
+        "status": "normal"
+    }
+}

@@ -114,8 +114,6 @@ def parse_payload(payload, valid_blocks) -> dict:
         if valid_blocks.AuthValid[x] == 1:
             pl = pl | parse_AuthPage(payload, x)
 
-    print("Parsed payload")
-    print(pl)
     return pl
 
 
@@ -164,7 +162,6 @@ def parse_basicID1(payload):
         pl["BasicID"] = payload[
             BasicID1_start_byte + 8 : BasicID1_start_byte + 8 + 21
         ].hex()
-    print(pl)
     return pl
 
 
@@ -204,7 +201,6 @@ def parse_Location(payload):
     [Latitude] = struct.unpack(
         "d", payload[Location_start_byte + 16 : Location_start_byte + 16 + 8]
     )
-    print("Latitude: ", Latitude)
     if Latitude == 0.0 or Latitude > 90.0 or Latitude < -90.0:
         Latitude = float("NaN")
     [Longitude] = struct.unpack(

@@ -20,9 +20,14 @@
 
 import socket
 
+DEFAULT_SERIAL_PORT: str = "/dev/ttyACM0"
+DEFAULT_SERIAL_BAUD_RATE: int = 115200
+DEFAULT_SERIAL_TIMEOUT: int = 10
 
-DEFAULT_MQTT_BROKER: str = "localhost"
-DEFAULT_MQTT_PORT: int = 1883
+DEFAULT_FEED_URL: str = "serial://" + DEFAULT_SERIAL_PORT + ":" + str(DEFAULT_SERIAL_BAUD_RATE)
+
+# DEFAULT_MQTT_BROKER: str = "localhost"
+# DEFAULT_MQTT_PORT: int = 1883
 DEFAULT_MQTT_TOPIC: str = "#"
 DEFAULT_GPS_INFO_CMD: str = "gpspipe --json -n 5"
 

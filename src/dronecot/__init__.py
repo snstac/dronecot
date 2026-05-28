@@ -20,9 +20,11 @@
 
 
 from .constants import (  # NOQA
-    DEFAULT_MQTT_BROKER,
-    DEFAULT_MQTT_PORT,
     DEFAULT_MQTT_TOPIC,
+    DEFAULT_FEED_URL,
+    DEFAULT_SERIAL_BAUD_RATE,
+    DEFAULT_SERIAL_TIMEOUT,
+    DEFAULT_SERIAL_PORT,
     DEFAULT_GPS_INFO_CMD,
     DEFAULT_SENSOR_ID,
     DEFAULT_SENSOR_PAYLOAD_TYPE,
@@ -38,7 +40,9 @@ from .functions import (  # NOQA
     create_tasks,
 )
 
-from .classes import MQTTWorker, RIDWorker  # NOQA
+from .classes import MQTTWorker, RIDWorker, RXMockWorker, SerialWorker  # NOQA
+
+from . import odid  # NOQA
 
 from .open_drone_id import (
     ODIDValidBlocks,
