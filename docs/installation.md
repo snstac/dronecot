@@ -1,33 +1,60 @@
-DroneCOT's functionality provided by a command-line program called `dronecot`.
+# Installation
 
-There are several methods of installing DroneCOT. They are listed below, in order of complexity.
+DroneCOT is a command-line program: `dronecot`.
 
-## Debian, Ubuntu, Raspberry Pi
+## Requirements
 
-Install DroneCOT, and prerequisite packages of [PyTAK](https://pytak.rtfd.io).
+- Python 3.9 or newer
+- [PyTAK](https://pytak.rtfd.io) 5.4.0+
+- For MQTT feeds: `aiomqtt`, `paho-mqtt`
+- For serial MAVLink feeds: `pymavlink`, `pyserial`
+- Open Drone ID parsing: `bitstruct`
+
+All runtime dependencies are installed automatically with `pip install dronecot`.
+
+## Debian / Ubuntu / Raspberry Pi
+
+Install PyTAK and DroneCOT from GitHub releases:
 
 ```sh linenums="1"
 sudo apt update
-wget https://github.com/ampledata/pytak/releases/latest/download/python3-pytak_latest_all.deb
+wget https://github.com/snstac/pytak/releases/latest/download/python3-pytak_latest_all.deb
 sudo apt install -f ./python3-pytak_latest_all.deb
-wget https://github.com/ampledata/dronecot/releases/latest/download/python3-dronecot_latest_all.deb
+wget https://github.com/snstac/dronecot/releases/latest/download/python3-dronecot_latest_all.deb
 sudo apt install -f ./python3-dronecot_latest_all.deb
 ```
 
-## Windows, Linux
-
-Install from the Python Package Index (PyPI) [Advanced Users]::
+## pip (all platforms)
 
 ```sh
-sudo python3 -m pip install dronecot
+python3 -m pip install dronecot
+```
+
+Optional TAK Protocol support (PyTAK extra):
+
+```sh
+python3 -m pip install 'dronecot[with_takproto]'
 ```
 
 ## Developers
 
-PRs welcome!
-
 ```sh linenums="1"
 git clone https://github.com/snstac/dronecot.git
 cd dronecot/
-python3 setup.py install
+make setup
+.venv/bin/dronecot -c example-config.ini
 ```
+
+`make setup` creates a virtualenv and installs dependencies from `requirements.txt`.
+
+Install the user systemd template:
+
+```sh
+make install_user_systemd
+```
+
+## Next steps
+
+- [Quick Start](quickstart.md)
+- [Configuration](configuration.md)
+- [Usage](usage.md)

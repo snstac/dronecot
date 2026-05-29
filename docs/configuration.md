@@ -1,59 +1,127 @@
-DroneCOT's configuration parameters can be set two ways:
+# Configuration
 
-1. In an INI-style configuration file. (ex. ``dronecot -c config.ini``)
-2. As environment variables. (ex. ``export DEBUG=1;dronecot``)
+DroneCOT reads a `[dronecot]` INI section or equivalent environment variables (PyTAK convention: ALL CAPS). Environment variables override values in the config file.
 
-DroneCOT has the following built-in configuration parameters:
+**Example `config.ini`:**
 
-* **`FEED_URL`**:
-    * Default: ``file:///run/dump1090-fa/aircraft.json``
+```ini
+[dronecot]
+FEED_URL = mqtt://broker.example.net:1883
+MQTT_TOPIC = #
+COT_URL = udp+wo://239.2.3.1:6969
+```
 
-    ADS-B data source URL. Supported URL types:
+**Equivalent environment variables:**
 
-    - ``file://`` The absolute local folder path to an ADS-B data file in JSON format.
-    - ``http://`` The local piaware web server aircraft data JSON URL. (ex. ``http://piaware.local:8080/data/aircraft.json``)
-    - ``tcp://`` A dump1090 BaseStation (SBS-1, "raw") host & port URL (ex. ``tcp://sensor.example.com:30003``).
-    - ``tcp+raw://`` A dump1090 BaseStation (SBS-1, "raw") host & port URL (ex. ``tcp+raw://sensor.example.com:30003``).
-    - ``tcp+beast://`` A dump1090 Beast binary mode host & port URL (ex. ``tcp+beast://sensor.example.com:30005``).
+```sh
+export FEED_URL=mqtt://broker.example.net:1883
+export MQTT_TOPIC='#'
+export COT_URL=udp+wo://239.2.3.1:6969
+```
 
-* **`POLL_INTERVAL`**:
-    * Default: ``3`` seconds
+A full commented template is in [example-config.ini](https://github.com/snstac/dronecot/blob/main/example-config.ini) in the repository.
 
-    If the `FEED_URL` is of type HTTP, the period, in seconds, to poll this URL.
-    
-* **`ALT_UPPER`**:
-    * Default: unset
+---
 
-    Upper Altitude Limit, geometric (GNSS / INS) altitude in feet referenced to the WGS84 ellipsoid.
+## Input feed
 
-* **`ALT_LOWER`**:
-    * Default: unset
-    
-    Lower Altitude Limit, geometric (GNSS / INS) altitude in feet referenced to the WGS84 ellipsoid.
+### `FEED_URL`
 
-* **`KNOWN_CRAFT`**:
-    * Default: unset
+**Default:** `serial:///dev/ttyACM0:115200`
 
-    CSV-style aircraft hints file for overriding callsign, icon, COT Type, etc.
+Selects the input worker. DroneCOT inspects the URL scheme:
 
-* **`INCLUDE_ALL_CRAFT`**:
-    * Default: ``False``
+| URL pattern | Worker | Description |
+|-------------|--------|-------------|
+| `mqtt://host:port` | MQTT | Plain MQTT broker |
+| `mqtts://host:port` | MQTT | MQTT over TLS (port 8883 if omitted) |
+| `serial:///dev/ttyACM0:115200` | Serial | MAVLink serial Open Drone ID |
 
-    If ``True`` and ``KNOWN_CRAFT`` is set, will forward all aircraft, including those transformed by the ``KNOWN_CRAFT`` database.
+!!! note
+    The URL must contain the substring `mqtt` or `serial` (case-insensitive) for the correct worker to start.
 
-* **`INCLUDE_TISB`**:
-    * Default: ``False``
+**Serial URL forms:**
 
-    If ``True``, includes TIS-B tracks.
+- `serial:///dev/ttyACM1:115200` — device path and baud in the path
+- `serial:///dev/ttyACM1` — baud from `SERIAL_BAUD_RATE` or default `115200`
 
-* **`TISB_ONLY`**:
-    * Default: ``False``
+### `SERIAL_PORT`
 
-    If `True`, only passes TIS-B tracks (`INCLUDE_TISB` must also be `True`).
+**Default:** parsed from `FEED_URL`, else `/dev/ttyACM0`
 
-Additional configuration parameters, including TAK Server configuration, are included in the [PyTAK Configuration](https://pytak.readthedocs.io/en/latest/configuration/) documentation.
+Override the serial device path.
 
+### `SERIAL_BAUD_RATE`
 
+**Default:** parsed from `FEED_URL`, else `115200`
 
+Override the serial baud rate.
 
+---
 
+## MQTT
+
+Used when `FEED_URL` contains `mqtt`. Broker host and port are taken from `FEED_URL` (not separate `MQTT_BROKER` / `MQTT_PORT` variables).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `MQTT_TOPIC` | `#` | Subscription topic |
+| `MQTT_USERNAME` | — | Broker username |
+| `MQTT_PASSWORD` | — | Broker password |
+| `MQTT_CLIENT_ID` | `dronecot_{hostname}` | MQTT client ID |
+
+### MQTT TLS
+
+MQTT TLS is **independent** from PyTAK TAK TLS (`PYTAK_TLS_*`). Use `MQTT_TLS_*` for the broker connection.
+
+| Key | Description |
+|-----|-------------|
+| `MQTT_TLS_CLIENT_CERT` | Client certificate path |
+| `MQTT_TLS_CLIENT_KEY` | Client private key path |
+| `MQTT_TLS_CLIENT_CAFILE` | CA bundle for broker verification |
+| `MQTT_TLS_CLIENT_CIPHERS` | Optional cipher list |
+| `MQTT_TLS_DONT_VERIFY` | `1` to disable certificate verification |
+| `MQTT_TLS_DONT_CHECK_HOSTNAME` | `1` to skip hostname check |
+
+TLS is also enabled when `FEED_URL` uses `mqtts`/`ssl` or port `8883`.
+
+Certificate paths are resolved relative to the current directory, home directory, and `~/work/SNS/dronecot/`.
+
+See [Feeds](feeds.md) for expected MQTT message formats.
+
+---
+
+## CoT output and identity
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `COT_URL` | `udp+wo://239.2.3.1:6969` (PyTAK) | CoT destination |
+| `SENSOR_ID` | `dronecot_{hostname}` | Sensor identifier in CoT |
+| `SENSOR_COT_TYPE` | `a-f-G-E-S-E` | CoT type for sensor status events |
+| `OP_COT_TYPE` | `a-u-G` | CoT type for operator markers |
+| `UAS_COT_TYPE` | `a-u-A-M-H-Q` | CoT type for aircraft markers |
+| `COT_STALE` | `3600` (PyTAK) | Stale time in seconds |
+| `COT_HOST_ID` | `pytak@{hostname}` (PyTAK) | Host ID in remarks |
+| `GPS_INFO_CMD` | `gpspipe --json -n 5` | Command for sensor GPS when not in feed |
+
+---
+
+## Optional
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `DEBUG` | `0` | Verbose logging (`1`, `true`, `yes`) |
+| `ENABLE_RX_MOCK` | `0` | Enable legacy RX mock worker (compatibility) |
+
+---
+
+## PyTAK transport / TLS
+
+DroneCOT uses PyTAK for CoT networking. See the [PyTAK configuration guide](https://pytak.rtfd.io/en/latest/configuration/) for:
+
+- `COT_URL` schemes (`tcp://`, `tls://`, `udp+wo://`, `log://stdout`, etc.)
+- `TAK_PROTO`, `PREF_PACKAGE`, `IMPORT_OTHER_CONFIGS`
+- `PYTAK_TLS_CLIENT_CERT`, `PYTAK_TLS_CLIENT_KEY`, and related **TAK Server** TLS options
+
+!!! warning
+    Do not confuse `PYTAK_TLS_*` (TAK Server / CoT) with `MQTT_TLS_*` (MQTT broker).

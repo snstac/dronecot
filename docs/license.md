@@ -1,28 +1,8 @@
-<img src="docs/media/pytak_logo.png" alt="PyTAK Logo" width="200">
+# License
 
-# DroneCOT - Display Drones in TAK
+## DroneCOT
 
-DroneCOT monitors Remote ID (RID), Direct Remote Identification (DRI), and Open Drone ID (ODID) broadcasts from uncrewed aircraft and reports them to the [Team Awareness Kit (TAK)](https://tak.gov) ecosystem as Cursor on Target (CoT). It is built on [PyTAK](https://pytak.rtfd.io).
-
-## Features
-
-- MQTT and serial MAVLink input feeds (select via `FEED_URL`)
-- Integrate with WinTAK, iTAK, ATAK, and TAK Server
-- User systemd instance template for side-by-side MQTT and serial workers
-
-## Getting Started
-
-See the [documentation](https://dronecot.rtfd.io) for [Quick Start](https://dronecot.rtfd.io/en/latest/quickstart/), installation, and configuration.
-
-## Contact
-
-For more information, visit [Sensors & Signals](https://www.snstac.com) or contact info@snstac.com.
-
-## License
-
-### DroneCOT
-
-Copyright Sensors & Signals LLC https://www.snstac.com/
+Copyright Sensors & Signals LLC https://www.snstac.com
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,7 +14,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-### open_drone_id.py
+## open_drone_id.py
 
 Copyright (c) 2022 BlueMark Innovations BV
 
