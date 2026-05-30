@@ -36,9 +36,13 @@ Selects the input worker. DroneCOT inspects the URL scheme:
 | `mqtt://host:port` | MQTT | Plain MQTT broker |
 | `mqtts://host:port` | MQTT | MQTT over TLS (port 8883 if omitted) |
 | `serial:///dev/ttyACM0:115200` | Serial | MAVLink serial Open Drone ID |
+| `wifi://wlan0` | Wi-Fi | Linux monitor mode (Beacon + NAN) |
+| `wifi+pcap:///path/file.pcapng` | Wi-Fi | Offline pcap replay |
+| `ble:///dev/ttyUSB0` or `ble://auto` | BLE | Sniffle USB dongle |
+| `wireless://wlan0` | Wi-Fi + BLE | Both workers (set `BLE_SERIAL` if needed) |
 
 !!! note
-    The URL must contain the substring `mqtt` or `serial` (case-insensitive) for the correct worker to start.
+    Worker selection is based on substrings in `FEED_URL` (`wireless` is checked before `wifi`). See [Feeds](feeds.md).
 
 **Serial URL forms:**
 
@@ -56,6 +60,37 @@ Override the serial device path.
 **Default:** parsed from `FEED_URL`, else `115200`
 
 Override the serial baud rate.
+
+---
+
+## Wi-Fi (monitor mode)
+
+Used when `FEED_URL` contains `wifi` or `wireless`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `WIFI_INTERFACE` | from `FEED_URL` or `wlan0` | Monitor-mode interface |
+| `WIFI_CHANNEL` | `6` | Initial channel |
+| `WIFI_HOP_CHANNELS` | — | Comma-separated hop list (e.g. `6,149`) |
+| `WIFI_HOP_DWELL` | `3,1` | Dwell seconds per channel in hop pair |
+| `WIFI_PCAP` | — | Offline pcap path (overrides live capture) |
+
+Requires `pip install 'dronecot[wifi]'` and Linux capabilities for live capture.
+
+---
+
+## BLE (Sniffle)
+
+Used when `FEED_URL` contains `ble` or `wireless`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `BLE_SERIAL` | `auto` | Serial device path |
+| `BLE_BAUD_RATE` | `2000000` | Sniffle baud rate |
+| `BLE_LONG_RANGE` | `1` | Listen for BLE 5 Coded PHY |
+| `BLE_EXTENDED` | `1` | Extended advertising |
+
+Requires [Sniffle](https://github.com/nccgroup/Sniffle) Python CLI on `PYTHONPATH`.
 
 ---
 

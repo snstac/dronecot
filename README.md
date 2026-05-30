@@ -6,7 +6,7 @@ DroneCOT monitors Remote ID (RID), Direct Remote Identification (DRI), and Open 
 
 ## Features
 
-- MQTT and serial MAVLink input feeds (select via `FEED_URL`)
+- MQTT, serial MAVLink, Wi-Fi monitor, and BLE (Sniffle) input feeds via `FEED_URL`
 - Integrate with WinTAK, iTAK, ATAK, and TAK Server
 - User systemd instance template for side-by-side MQTT and serial workers
 

@@ -43,6 +43,30 @@ Create `config.ini` for your input feed.
     COT_URL = udp+wo://239.2.3.1:6969
     ```
 
+=== "Wi-Fi (Linux)"
+
+    ```sh
+    pip install 'dronecot[wifi]'
+    sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' "$(readlink -f "$(which python3)")"
+    ```
+
+    ```ini
+    [dronecot]
+    FEED_URL = wifi://wlan0
+    WIFI_CHANNEL = 6
+    COT_URL = udp+wo://239.2.3.1:6969
+    ```
+
+=== "BLE (Sniffle)"
+
+    ```ini
+    [dronecot]
+    FEED_URL = ble://auto
+    COT_URL = udp+wo://239.2.3.1:6969
+    ```
+
+    Install [Sniffle](https://github.com/nccgroup/Sniffle) and add `python_cli` to `PYTHONPATH`.
+
 For TAK Server over TLS, add PyTAK options — see [Configuration](configuration.md).
 
 ## 3. Run

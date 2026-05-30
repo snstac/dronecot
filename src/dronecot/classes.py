@@ -80,53 +80,7 @@ class SerialWorker(pytak.QueueWorker):
     def _mavlink_pack_to_parse_payload_schema(self, messages, pack_size) -> dict:
         """Convert MAVLink OPEN_DRONE_ID_MESSAGE_PACK to parse_payload-like schema."""
         parsed = dronecot.odid.message_pack_to_dict(messages, pack_size)
-        out = {}
-
-        if "UASID" in parsed:
-            out["BasicID"] = parsed["UASID"]
-        for key in ("IDType", "UAType"):
-            if key in parsed:
-                out[key] = parsed[key]
-
-        for key in (
-            "Status",
-            "Direction",
-            "SpeedHorizontal",
-            "SpeedVertical",
-            "Latitude",
-            "Longitude",
-            "AltitudeBaro",
-            "AltitudeGeo",
-            "HeightType",
-            "Height",
-            "HorizAccuracy",
-            "VertAccuracy",
-            "BaroAccuracy",
-            "SpeedAccuracy",
-            "TSAccuracy",
-            "TimestampLocation",
-            "DescType",
-            "Desc",
-            "ClassificationType",
-            "OperatorLocationType",
-            "OperatorLatitude",
-            "OperatorLongitude",
-            "AreaCount",
-            "AreaRadius",
-            "AreaCeiling",
-            "AreaFloor",
-            "CategoryEU",
-            "ClassEU",
-            "OperatorAltitudeGeo",
-            "TimestampRaw",
-            "Timestamp",
-            "OperatorIdType",
-            "OperatorID",
-        ):
-            if key in parsed:
-                out[key] = parsed[key]
-
-        return out
+        return dronecot.rid_normalize.odid_parsed_to_rid_dict(parsed)
 
     async def run(self, _=-1) -> None:
         """Read MAVLink messages from serial and enqueue decoded ODID payloads."""
@@ -330,11 +284,12 @@ class MQTTWorker(pytak.QueueWorker):
             return
 
         uasdata = base64.b64decode(uasdata)
-
-        valid_blocks = dronecot.decode_valid_blocks(uasdata, dronecot.ODIDValidBlocks())
-        pl = dronecot.parse_payload(uasdata, valid_blocks)
-        del data["UASdata"]
-        pl["data"] = data
+        meta = dict(data)
+        meta.update(dronecot.rid_normalize.uas_meta_defaults(self.config))
+        pl = dronecot.rid_normalize.cuas_blob_to_rid_dict(uasdata, meta)
+        if not pl:
+            self._logger.error("Failed to decode UASdata payload")
+            return
         pl["topic"] = message["topic"]
         await self.put_queue(pl)
 
@@ -458,6 +413,132 @@ class MQTTWorker(pytak.QueueWorker):
                 async for message in messages:
                     self._logger.debug("Received MQTT message: %s", message)
                     await self.handle_data(message)
+
+
+class WifiWorker(pytak.QueueWorker):
+    """Queue Worker for Wi-Fi monitor-mode Open Drone ID capture."""
+
+    def __init__(self, queue, config):
+        super().__init__(queue, config)
+        self.config = config
+        self._loop = None
+        self._sniffer = None
+
+    def _on_wifi_packet(self, pack: bytes, meta: dict) -> None:
+        merged = {**dronecot.rid_normalize.uas_meta_defaults(self.config), **meta}
+        pl = dronecot.rid_normalize.bytes_to_rid_dict(pack, merged)
+        if pl and self._loop:
+            asyncio.run_coroutine_threadsafe(self.put_queue(pl), self._loop)
+
+    async def run(self, _=-1) -> None:
+        self._logger.info("Running WifiWorker")
+        self._loop = asyncio.get_running_loop()
+
+        try:
+            from dronecot.wifi_capture import WifiSniffer, parse_wifi_feed_url
+        except ImportError as exc:
+            self._logger.error("Wi-Fi capture unavailable: %s", exc)
+            return
+
+        feed_url = str(self.config.get("FEED_URL", dronecot.DEFAULT_FEED_URL))
+        feed = parse_wifi_feed_url(feed_url)
+
+        interface = self.config.get("WIFI_INTERFACE") or feed.get("interface")
+        pcap_path = self.config.get("WIFI_PCAP") or feed.get("pcap_path")
+        channel = int(self.config.get("WIFI_CHANNEL", feed.get("channel", 6)))
+
+        hop_channels = feed.get("hop_channels")
+        hop_raw = self.config.get("WIFI_HOP_CHANNELS")
+        if hop_raw:
+            hop_channels = [int(x.strip()) for x in str(hop_raw).split(",") if x.strip()]
+
+        dwell_raw = self.config.get("WIFI_HOP_DWELL", "3,1")
+        dwell_parts = tuple(float(x.strip()) for x in str(dwell_raw).split(",") if x.strip())
+        if len(dwell_parts) < 2:
+            dwell_parts = feed.get("hop_dwell", (3.0, 1.0))
+
+        self._sniffer = WifiSniffer(
+            on_packet=self._on_wifi_packet,
+            interface=interface,
+            pcap_path=pcap_path,
+            channel=channel,
+            hop_channels=hop_channels,
+            hop_dwell=dwell_parts,
+        )
+
+        try:
+            self._sniffer.start()
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pylint: disable=broad-except
+            self._logger.error("Wi-Fi capture failed: %s", exc)
+        finally:
+            if self._sniffer:
+                self._sniffer.stop()
+
+
+class BleWorker(pytak.QueueWorker):
+    """Queue Worker for BLE Open Drone ID capture (Sniffle dongle)."""
+
+    def __init__(self, queue, config):
+        super().__init__(queue, config)
+        self.config = config
+        self._loop = None
+        self._sniffer = None
+
+    def _on_ble_packet(self, pack: bytes, meta: dict) -> None:
+        merged = {**dronecot.rid_normalize.uas_meta_defaults(self.config), **meta}
+        pl = dronecot.rid_normalize.bytes_to_rid_dict(pack, merged)
+        if pl and self._loop:
+            asyncio.run_coroutine_threadsafe(self.put_queue(pl), self._loop)
+
+    async def run(self, _=-1) -> None:
+        self._logger.info("Running BleWorker")
+        self._loop = asyncio.get_running_loop()
+
+        try:
+            from dronecot.ble_capture import BleSniffer, parse_ble_feed_url
+        except ImportError as exc:
+            self._logger.error("BLE capture unavailable: %s", exc)
+            return
+
+        feed_url = str(self.config.get("FEED_URL", ""))
+        feed = parse_ble_feed_url(feed_url)
+
+        serial = self.config.get("BLE_SERIAL") or feed.get("serial")
+        baud = int(self.config.get("BLE_BAUD_RATE", feed.get("baud", 2000000)))
+        long_range = str(self.config.get("BLE_LONG_RANGE", "1")).lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        extended = str(self.config.get("BLE_EXTENDED", "1")).lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+
+        self._sniffer = BleSniffer(
+            on_packet=self._on_ble_packet,
+            serial_port=serial,
+            baud=baud,
+            long_range=long_range,
+            extended=extended,
+        )
+
+        try:
+            self._sniffer.start()
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pylint: disable=broad-except
+            self._logger.error("BLE capture failed: %s", exc)
+        finally:
+            if self._sniffer:
+                self._sniffer.stop()
 
 
 class RIDWorker(pytak.QueueWorker):

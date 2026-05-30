@@ -1,3 +1,10 @@
+## DroneCOT 1.2.0
+
+- Add native Linux wireless Remote ID capture: Wi-Fi monitor mode (Beacon + NAN)
+  and BLE via Sniffle-compatible dongle (`wifi://`, `ble://`, `wireless://` feeds).
+- Add `rid_normalize`, `wifi_parse`, `wifi_capture`, `ble_parse`, and `ble_capture`
+  modules; optional `pip install 'dronecot[wireless]'` for Scapy.
+
 ## DroneCOT 1.1.3
 
 - Add user-systemd instance template (`dronecot@.service`) to support running

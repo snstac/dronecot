@@ -56,7 +56,14 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
 
     feed_url = str(config.get("FEED_URL", dronecot.DEFAULT_FEED_URL)).lower()
 
-    if "mqtt" in feed_url:
+    if "wireless" in feed_url:
+        tasks.add(dronecot.WifiWorker(net_queue, config))
+        tasks.add(dronecot.BleWorker(net_queue, config))
+    elif "wifi" in feed_url:
+        tasks.add(dronecot.WifiWorker(net_queue, config))
+    elif "ble" in feed_url:
+        tasks.add(dronecot.BleWorker(net_queue, config))
+    elif "mqtt" in feed_url:
         tasks.add(dronecot.MQTTWorker(net_queue, config))
     elif "serial" in feed_url:
         tasks.add(dronecot.SerialWorker(net_queue, config))

@@ -50,6 +50,23 @@ Test with debug logging and confirm `Connected to MQTT Broker` and `Subscribed t
 
 DroneCOT reconnects automatically after serial or heartbeat errors.
 
+## Wi-Fi capture
+
+| Symptom | Things to check |
+|---------|-----------------|
+| `scapy` import error | `pip install 'dronecot[wifi]'` |
+| Permission denied | `CAP_NET_RAW` / `CAP_NET_ADMIN` or run as root |
+| No aircraft | Monitor mode supported? Channel 6 vs 5 GHz (`WIFI_HOP_CHANNELS=6,149`) |
+| Interface missing | `ip link`; try USB adapter; `WIFI_INTERFACE=wlan1` |
+
+## BLE capture
+
+| Symptom | Things to check |
+|---------|-----------------|
+| Sniffle not found | Install Sniffle and set `PYTHONPATH` to `python_cli` |
+| No serial port | `BLE_SERIAL=/dev/ttyUSB0`; dongle flashed with Sniffle firmware |
+| Wrong baud | `BLE_BAUD_RATE=2000000` for newer Sonoff; omit for 921600 CP2102 |
+
 ## CoT / TAK
 
 | Symptom | Things to check |

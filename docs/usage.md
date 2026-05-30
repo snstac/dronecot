@@ -119,4 +119,28 @@ COT_URL=udp+wo://239.2.3.1:6969
 DEBUG=1
 ```
 
+### Example `~/.config/dronecot/wifi.env`
+
+```bash
+FEED_URL=wifi://wlan0
+WIFI_CHANNEL=6
+WIFI_HOP_CHANNELS=6,149
+COT_URL=udp+wo://239.2.3.1:6969
+```
+
+For live Wi-Fi capture, the user unit may need:
+
+```ini
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+```
+
+### Example `~/.config/dronecot/wireless.env`
+
+```bash
+FEED_URL=wireless://wlan0
+BLE_SERIAL=/dev/ttyUSB0
+WIFI_CHANNEL=6
+COT_URL=udp+wo://239.2.3.1:6969
+```
+
 See [Troubleshooting](troubleshooting.md) for debug logging and common issues.

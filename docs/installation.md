@@ -30,10 +30,11 @@ sudo apt install -f ./python3-dronecot_latest_all.deb
 python3 -m pip install dronecot
 ```
 
-Optional TAK Protocol support (PyTAK extra):
+Optional extras:
 
 ```sh
 python3 -m pip install 'dronecot[with_takproto]'
+python3 -m pip install 'dronecot[wireless]'   # Wi-Fi monitor (Scapy) + BLE (Sniffle separately)
 ```
 
 ## Developers
