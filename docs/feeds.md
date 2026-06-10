@@ -137,6 +137,67 @@ Reference: [receiver-android](https://github.com/opendroneid/receiver-android) (
 
 ---
 
+## UDP pre-decoded Remote ID feed
+
+When `FEED_URL` contains `udp` or `UDP_RID_PORT` is set, **UDPRIDWorker** listens for pre-decoded Remote ID JSON broadcast over UDP by drone detection nodes. This enables integration with hardware receivers that decode ASTM F3411 locally and emit flat JSONL records.
+
+### Message format
+
+```json
+{"t": 1745000000.0, "mac": "fa:0b:bc:12:34:56", "radio": "wifi_beacon",
+ "rssi": -68, "channel": 6, "lat": 40.7128, "lon": -74.0060,
+ "alt": 120.5, "speed": 8.25, "hdg": 270.0, "id": "DRONE-SN-001"}
+```
+
+Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `t` | float | Unix timestamp (seconds) |
+| `mac` | string | Source MAC address |
+| `radio` | string | `wifi_beacon`, `wifi_nan`, `ble`, `ble_legacy`, `ble_long_range` |
+| `rssi` | int | Signal strength (dBm) |
+| `channel` | int | Wi-Fi channel (0 for BLE) |
+| `lat` / `lon` | float | WGS-84 position |
+| `alt` | float | Altitude (m AGL) |
+| `speed` | float | Horizontal speed (m/s) |
+| `hdg` | float | Heading (degrees) |
+| `id` | string\|null | Remote ID serial; falls back to `mac` if null |
+
+Only records with valid `lat`/`lon` produce CoT events; identity-only frames are silently dropped.
+
+### Configuration
+
+```ini
+FEED_URL = udp://0.0.0.0:9999
+```
+
+Or set the port explicitly (and omit `FEED_URL`):
+
+```ini
+UDP_RID_PORT = 9999
+UDP_RID_HOST = 0.0.0.0
+```
+
+### Processing flow
+
+```mermaid
+flowchart LR
+  Node[Detection node\nUDP broadcast]
+  UDPRIDWorker[UDPRIDWorker]
+  Parse[parse_udp_rid_line]
+  Queue[asyncio queue]
+  RIDWorker[RIDWorker]
+  CoT[CoT XML to COT_URL]
+  Node --> UDPRIDWorker
+  UDPRIDWorker --> Parse
+  Parse --> Queue
+  Queue --> RIDWorker
+  RIDWorker --> CoT
+```
+
+---
+
 ## CoT output
 
 **RIDWorker** converts parsed data to:
