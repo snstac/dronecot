@@ -21,40 +21,72 @@
 import asyncio
 import base64
 import json
+import logging
+import os
 import subprocess
 import xml.etree.ElementTree as ET
 
 from configparser import SectionProxy
 from typing import Optional, Set, Union
+from urllib.parse import urlparse
 
 import pytak
 import dronecot
 from datetime import datetime
 import pytz
 
+from .dji_functions import parse_frame, parse_data
+from .dji_text_parser import dji_parse_text_line
+from .constants import (
+    DEFAULT_DJI_COT_TYPE,
+    DEFAULT_DJI_SENSOR_LAT,
+    DEFAULT_DJI_SENSOR_LON,
+    DEFAULT_DJI_SENSOR_HAE,
+    DEFAULT_DJI_SENSOR_CE,
+    DEFAULT_DJI_SENSOR_LE,
+    DEFAULT_DJI_SENSOR_STALE,
+    DEFAULT_DJI_SENSOR_SN,
+    DEFAULT_DJI_SENSOR_NAME,
+    DEFAULT_DJI_SENSOR_TYPE,
+    DEFAULT_DJI_SENSOR_COT_TYPE,
+    DEFAULT_DJI_BREAD_CRUMBS_ENABLED,
+    DEFAULT_DJI_HIDE_INVALID_DATA,
+    DEFAULT_DJI_ALERT_ID,
+    DEFAULT_DJI_MAX_HORIZONTAL_SPEED,
+    DEFAULT_DJI_FEED_URL,
+    DEFAULT_DJI_TEXT_PORT,
+)
+
+_DJI_Logger = logging.getLogger(__name__)
+
 APP_NAME = "dronecot"
+
+
+def _dji_feed_uses_text(config, feed_url: str, parsed) -> bool:
+    """Return True if the configured DJI feed uses AntSDR text CSV format."""
+    feed_format = str(config.get("FEED_FORMAT", "")).lower()
+    if feed_format == "text":
+        return True
+    if parsed.port == DEFAULT_DJI_TEXT_PORT:
+        return True
+    return False
 
 
 def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Worker,]:
     """Create specific coroutine task set for this application.
 
-    Parameters
-    ----------
-    config : `SectionProxy`
-        Configuration options & values.
-    clitool : `pytak.CLITool`
-        A PyTAK Worker class instance.
-
-    Returns
-    -------
-    `set`
-        Set of PyTAK Worker classes for this application.
+    Routes based on FEED_URL scheme:
+      mqtt://    -> MQTTWorker   + RIDWorker  (Open Drone ID via MQTT)
+      serial://  -> SerialWorker + RIDWorker  (MAVLink Open Drone ID)
+      tcp://     -> DJI*Worker  + DJIWorker   (DJI AntSDR binary or text)
+      file://    -> DJIFileWorker + DJIWorker  (DJI offline replay)
+    DJI_TCP_PORT set -> DJIListenerWorker + DJIWorker (scanner-push mode)
     """
     tasks = set()
-
     net_queue: asyncio.Queue = asyncio.Queue()
 
     feed_url = str(config.get("FEED_URL", dronecot.DEFAULT_FEED_URL)).lower()
+    parsed = urlparse(feed_url)
 
     if "wireless" in feed_url:
         tasks.add(dronecot.WifiWorker(net_queue, config))
@@ -63,15 +95,27 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
         tasks.add(dronecot.WifiWorker(net_queue, config))
     elif "ble" in feed_url:
         tasks.add(dronecot.BleWorker(net_queue, config))
-    elif "mqtt" in feed_url:
+    elif parsed.scheme == "mqtt" or "mqtt" in feed_url:
         tasks.add(dronecot.MQTTWorker(net_queue, config))
-    elif "serial" in feed_url:
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
+    elif parsed.scheme == "serial" or "serial" in feed_url:
         tasks.add(dronecot.SerialWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
+    elif config.get("DJI_TCP_PORT"):
+        tasks.add(dronecot.DJIListenerWorker(net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+    elif parsed.scheme == "tcp":
+        if _dji_feed_uses_text(config, feed_url, parsed):
+            tasks.add(dronecot.DJITextWorker(net_queue, config))
+        else:
+            tasks.add(dronecot.DJINetWorker(net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+    elif parsed.scheme == "file":
+        tasks.add(dronecot.DJIFileWorker(net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+    else:
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
 
-    tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
-
-    # Optional compatibility shim for older PyTAK flows.
-    # Newer PyTAK RXWorker signatures changed and can break this mock worker.
     if config.get("ENABLE_RX_MOCK", "0") == "1":
         tasks.add(dronecot.RXMockWorker(clitool.rx_queue, config))
 
@@ -539,3 +583,250 @@ def parse_sensor_data(data):
     pl["topic"] = message["topic"]
 
     return pl
+
+
+# ---------------------------------------------------------------------------
+# DJI Drone ID CoT generation functions
+# ---------------------------------------------------------------------------
+
+def _dji_is_valid_lat_lon(lat, lon) -> bool:
+    """Return True if lat/lon are finite, non-zero, and in valid range."""
+    if lat is None or lon is None:
+        return False
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+        return -90 <= lat_f <= 90 and -180 <= lon_f <= 180
+    except (ValueError, TypeError):
+        return False
+
+
+def gen_dji_cot(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    data, config: Union[SectionProxy, dict, None] = None, leg: str = "uas"
+) -> Optional[ET.Element]:
+    """Generate a Cursor on Target XML event from parsed DJI Drone ID data."""
+    config = config or {}
+
+    lat = data.get(f"{leg}_lat")
+    lon = data.get(f"{leg}_lon")
+
+    lat_lon_valid = _dji_is_valid_lat_lon(lat, lon)
+    if not lat_lon_valid:
+        lat = None
+        lon = None
+
+    if not lat_lon_valid and config.get("HIDE_INVALID_DATA", DEFAULT_DJI_HIDE_INVALID_DATA):
+        return None
+
+    freq = str(data.get("freq", 0.0))
+    rssi = str(data.get("rssi", -999))
+    serial_number = data.get("serial_number")
+    uas_sn = serial_number or freq
+    uas_type = data.get("device_type", "")
+
+    cot_type: str = str(config.get("COT_TYPE", DEFAULT_DJI_COT_TYPE))
+    cot_uid = f"DJI-{uas_sn}"
+    if leg in ("op", "home"):
+        cot_type = "a-u-G-U-C"
+        cot_uid = f"DJI-{uas_sn}-{leg}"
+
+    callsign = f"DJI {uas_type} {leg} ({uas_sn[-4:]})"
+    ce = str(data.get("nac_p", "9999999.0"))
+
+    if not lat_lon_valid:
+        if leg in ("op", "home"):
+            return None
+        lat = config.get("SENSOR_LAT", DEFAULT_DJI_SENSOR_LAT)
+        lon = config.get("SENSOR_LON", DEFAULT_DJI_SENSOR_LON)
+        cot_type = "a-u-A-M-H-Q"
+        callsign = f"{callsign} (Range)"
+        ce = 1000.0 * abs(int(rssi))
+
+    cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
+    cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
+    sensor_id = str(config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID))
+
+    cuas = ET.Element("__cuas")
+    cuas.set("sensor_id", sensor_id)
+    cuas.set("sensor_sn", str(config.get("SENSOR_SN", DEFAULT_DJI_SENSOR_SN)))
+    cuas.set("sensor_type", str(config.get("SENSOR_TYPE", DEFAULT_DJI_SENSOR_TYPE)))
+    cuas.set("sensor_name", str(config.get("SENSOR_NAME", DEFAULT_DJI_SENSOR_NAME)))
+    cuas.set("cot_host_id", cot_host_id)
+    cuas.set("uas_type", uas_type)
+    cuas.set("uas_type_8", str(data.get("device_type_8")))
+    cuas.set("uas_sn", str(uas_sn))
+    cuas.set("freq", freq)
+    cuas.set("rssi", rssi)
+    cuas.set("speed_e", str(data.get("speed_e", 0.0)))
+    cuas.set("speed_n", str(data.get("speed_n", 0.0)))
+    cuas.set("speed_u", str(data.get("speed_u", 0.0)))
+    valid = "1" if lat_lon_valid else "0"
+    cuas.set("valid_geo", valid)
+    cuas.set("sn_present", valid)
+    cuas.set("serial_valid", valid)
+
+    crumbs = ET.Element("__bread_crumbs")
+    crumbs.set("enabled", str(config.get("BREAD_CRUMBS_ENABLED", DEFAULT_DJI_BREAD_CRUMBS_ENABLED)))
+
+    contact = ET.Element("contact")
+    contact.set("callsign", callsign)
+
+    track = ET.Element("track")
+    track.set("course", data.get("course_point", "9999999.0"))
+    track.set("speed", data.get("speed_point", "9999999.0"))
+
+    remarks = ET.Element("remarks")
+    remarks.text = (
+        f"sn={uas_sn} ({uas_type}) freq={data.get('freq', 0.0)} "
+        f"rssi={data.get('rssi', 0)} sensor_id={sensor_id}"
+    )
+
+    detail = ET.Element("detail")
+    detail.append(remarks)
+    detail.append(contact)
+    detail.append(track)
+    detail.append(cuas)
+    detail.append(crumbs)
+
+    cot_d = {
+        "lat": str(lat),
+        "lon": str(lon),
+        "ce": ce,
+        "le": str(data.get("nac_v", "9999999.0")),
+        "hae": str(data.get("alt_geom", "9999999.0")),
+        "uid": cot_uid,
+        "cot_type": cot_type,
+        "stale": cot_stale,
+    }
+    cot = pytak.gen_cot_xml(**cot_d)
+    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
+
+    _detail = cot.find("detail")
+    if _detail is not None:
+        flowtags = _detail.findall("_flow-tags_")
+        detail.extend(flowtags)
+        cot.remove(_detail)
+    cot.append(detail)
+
+    return cot
+
+
+def dji_sensor_to_cot(
+    data, config: Union[SectionProxy, dict, None] = None
+) -> Optional[ET.Element]:
+    """Generate a CoT sensor beacon event for the DJI AntSDR sensor."""
+    config = config or {}
+    lat = config.get("SENSOR_LAT", DEFAULT_DJI_SENSOR_LAT)
+    lon = config.get("SENSOR_LON", DEFAULT_DJI_SENSOR_LON)
+    if lat is None or lon is None:
+        return None
+
+    sensor_id = config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID)
+    sensor_sn = config.get("SENSOR_SN", DEFAULT_DJI_SENSOR_SN)
+    sensor_type = config.get("SENSOR_TYPE", DEFAULT_DJI_SENSOR_TYPE)
+    cot_host_id = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
+    cot_uid = config.get("SENSOR_UID", f"CUAS-{sensor_type}-{sensor_sn}-{cot_host_id}")
+    callsign = config.get("SENSOR_CALLSIGN", f"CUAS-{sensor_type}-{sensor_sn}")
+    cot_type = config.get("SENSOR_COT_TYPE", DEFAULT_DJI_SENSOR_COT_TYPE)
+    cot_stale = config.get("SENSOR_STALE", DEFAULT_DJI_SENSOR_STALE)
+
+    cuas = ET.Element("__cuas")
+    cuas.set("sensor_id", sensor_id)
+    cuas.set("sensor_sn", sensor_sn)
+    cuas.set("sensor_type", sensor_type)
+    cuas.set("cot_host_id", cot_host_id)
+
+    contact = ET.Element("contact")
+    contact.set("callsign", callsign)
+
+    remarks = ET.Element("remarks")
+    remarks.text = f"sensor_id={sensor_id} sensor_sn={sensor_sn} sensor_type={sensor_type}: {data}"
+
+    detail = ET.Element("detail")
+    detail.append(remarks)
+    detail.append(contact)
+    detail.append(cuas)
+
+    cot_d = {
+        "lat": str(lat),
+        "lon": str(lon),
+        "ce": str(config.get("SENSOR_CE", DEFAULT_DJI_SENSOR_CE)),
+        "le": str(config.get("SENSOR_LE", DEFAULT_DJI_SENSOR_LE)),
+        "hae": str(config.get("SENSOR_HAE", DEFAULT_DJI_SENSOR_HAE)),
+        "uid": cot_uid,
+        "cot_type": cot_type,
+        "stale": cot_stale,
+    }
+    cot = pytak.gen_cot_xml(**cot_d)
+    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
+
+    _detail = cot.find("detail")
+    if _detail is not None:
+        flowtags = _detail.findall("_flow-tags_")
+        detail.extend(flowtags)
+        cot.remove(_detail)
+    cot.append(detail)
+
+    return cot
+
+
+def dji_uas_to_cot(data, config: Union[SectionProxy, dict, None] = None) -> Optional[ET.Element]:
+    """Generate CoT for DJI UAS (drone) position."""
+    return gen_dji_cot(data, config, leg="uas")
+
+
+def dji_op_to_cot(data, config: Union[SectionProxy, dict, None] = None) -> Optional[ET.Element]:
+    """Generate CoT for DJI operator position."""
+    return gen_dji_cot(data, config, leg="op")
+
+
+def dji_home_to_cot(data, config: Union[SectionProxy, dict, None] = None) -> Optional[ET.Element]:
+    """Generate CoT for DJI home position."""
+    return gen_dji_cot(data, config, leg="home")
+
+
+def dji_handle_parsed_data(
+    parsed_data: dict, config: Union[SectionProxy, dict, None] = None
+) -> list:
+    """Generate CoT event bytes from a parsed DJI data dict."""
+    config = config or {}
+    events = []
+    for func in ("dji_uas_to_cot", "dji_op_to_cot", "dji_home_to_cot"):
+        event: Optional[bytes] = xml_to_cot(parsed_data, config, func)
+        if event:
+            events.append(event)
+    return events
+
+
+def dji_handle_text_line(
+    line: str, config: Union[SectionProxy, dict, None] = None
+) -> list:
+    """Parse an AntSDR text CSV line and return CoT event bytes."""
+    config = config or {}
+    parsed_data = dji_parse_text_line(line)
+    if not parsed_data:
+        return []
+    return dji_handle_parsed_data(parsed_data, config)
+
+
+def dji_handle_frame(
+    frame: bytearray, config: Union[SectionProxy, dict, None] = None
+) -> list:
+    """Parse a binary DJI Drone ID frame and return CoT event bytes."""
+    config = config or {}
+    try:
+        package_type, data = parse_frame(frame)
+    except Exception as exc:
+        _DJI_Logger.warning("Error parsing DJI frame: %s", exc)
+        return []
+    if package_type != 0x01:
+        _DJI_Logger.warning("Invalid DJI package type: %s", package_type)
+        return []
+    if not data:
+        return []
+    try:
+        parsed_data = parse_data(data)
+    except Exception as exc:
+        _DJI_Logger.warning("Error parsing DJI data: %s", exc)
+        return []
+    return dji_handle_parsed_data(parsed_data, config)

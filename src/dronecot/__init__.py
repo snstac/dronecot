@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-"""Drone Open Remote ID to TAK Gateway."""
+"""Drone Open Remote ID to TAK Gateway (with DJI Drone ID support)."""
 
 
 from .constants import (  # NOQA
@@ -35,13 +35,37 @@ from .constants import (  # NOQA
     DEFAULT_SENSOR_COT_TYPE,
     DEFAULT_OP_COT_TYPE,
     DEFAULT_HOME_COT_TYPE,
-    DEFAULT_UAS_COT_TYPE    
+    DEFAULT_UAS_COT_TYPE,
+    # DJI Drone ID constants
+    DEFAULT_DJI_FEED_URL,
+    DEFAULT_DJI_TEXT_FEED_URL,
+    DEFAULT_DJI_BINARY_PORT,
+    DEFAULT_DJI_TEXT_PORT,
+    DEFAULT_DJI_TCP_PORT,
+    DEFAULT_DJI_BIND_ADDRESS,
+    DEFAULT_DJI_COT_TYPE,
+    DEFAULT_DJI_READ_BYTES,
+    DEFAULT_DJI_SENSOR_LAT,
+    DEFAULT_DJI_SENSOR_LON,
+    DEFAULT_DJI_SENSOR_SN,
+    DEFAULT_DJI_SENSOR_NAME,
+    DEFAULT_DJI_SENSOR_TYPE,
+    DEFAULT_DJI_SENSOR_COT_TYPE,
 )
 
 from .functions import (  # NOQA
     xml_to_cot,
     cot_to_xml,
     create_tasks,
+    # DJI Drone ID functions
+    gen_dji_cot,
+    dji_uas_to_cot,
+    dji_op_to_cot,
+    dji_home_to_cot,
+    dji_sensor_to_cot,
+    dji_handle_frame,
+    dji_handle_text_line,
+    dji_handle_parsed_data,
 )
 
 from .classes import (  # NOQA
@@ -51,6 +75,25 @@ from .classes import (  # NOQA
     RXMockWorker,
     SerialWorker,
     WifiWorker,
+    # DJI Drone ID workers
+    DJIWorker,
+    DJINetWorker,
+    DJITextWorker,
+    DJIFileWorker,
+    DJIListenerWorker,
+    # Backward-compat aliases
+    NetWorker,
+    BinaryNetWorker,
+    TextNetWorker,
+    FileReplayWorker,
+    TCPListenerWorker,
+)
+
+from .dji_exceptions import (  # NOQA
+    DJICOTError,
+    DJIDataError,
+    DJIConnectionError,
+    DJIConfigurationError,
 )
 
 from . import odid  # NOQA
