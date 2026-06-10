@@ -82,7 +82,7 @@ def parse_udp_rid_message(msg: dict, config=None) -> Optional[dict]:
         "data": {
             "MAC address": mac,
             "RSSI": int(msg.get("rssi") or 0),
-            "channel": 0,
+            "channel": int(msg.get("channel") or 0),
             "type": sensor_type,
             "timestamp": ts_ms,
             "sensor ID": sensor_id,
