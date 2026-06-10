@@ -46,6 +46,10 @@ DEFAULT_OP_COT_TYPE: str = "a-n-G"
 DEFAULT_UAS_COT_TYPE: str = "a-n-A-M-H-Q"
 DEFAULT_HOME_COT_TYPE: str = "a-n-G"
 
+# Pre-decoded Remote ID JSON over UDP constants
+DEFAULT_UDP_RID_PORT: int = 9999
+DEFAULT_UDP_RID_HOST: str = "0.0.0.0"
+
 # DJI Drone ID (AntSDR) constants
 DEFAULT_DJI_FEED_URL: str = "tcp://192.168.1.10:41030"
 DEFAULT_DJI_TEXT_FEED_URL: str = "tcp://192.168.1.10:52002"

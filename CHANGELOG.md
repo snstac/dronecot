@@ -1,3 +1,12 @@
+## DroneCOT 2.1.0
+
+- Add `UDPRIDWorker`: UDP listener (default port 9999) for pre-decoded Wi-Fi / BLE Remote ID JSON broadcasts from drone detection nodes.
+- Add `udp_rid.py` module: `parse_udp_rid_message()` and `parse_udp_rid_line()` convert flat decoded JSONL (`t`, `mac`, `radio`, `rssi`, `lat`, `lon`, `alt`, `speed`, `hdg`, `id`) to RIDWorker-compatible dicts.
+- Map `radio` field values (`wifi_beacon`, `wifi_nan`, `ble_legacy`, `ble_long_range`, `ble_coded`) to sensor type labels used by CoT generator.
+- `create_tasks` now routes `udp://` feed URL or `UDP_RID_PORT` config option to `UDPRIDWorker` + `RIDWorker`.
+- Fix: `wifi://`, `ble://`, `wireless://` branches now correctly include `RIDWorker` to consume the net_queue they produce.
+- New constants: `DEFAULT_UDP_RID_PORT = 9999`, `DEFAULT_UDP_RID_HOST = "0.0.0.0"`.
+
 ## DroneCOT 2.0.0
 
 - Absorbed DJI Drone ID (DJICOT) support directly into dronecot package.

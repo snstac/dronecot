@@ -210,5 +210,79 @@ class FunctionsTestCase(unittest.TestCase):
         self.assertEqual(cuas.get("type"), "BLE long range")
 
 
+class UDPRIDParserTestCase(unittest.TestCase):
+    """Tests for the pre-decoded UDP Remote ID JSON parser."""
+
+    WIFI_MSG = {
+        "t": 1745000000.0,
+        "mac": "fa:0b:bc:12:34:56",
+        "radio": "wifi_beacon",
+        "rssi": -68,
+        "type": "Location/Vector",
+        "lat": 40.7128,
+        "lon": -74.006,
+        "alt": 120.5,
+        "speed": 8.25,
+        "hdg": 270.0,
+        "id": "DRONE-SN-001",
+    }
+
+    def test_wifi_beacon_parse(self):
+        result = dronecot.parse_udp_rid_message(self.WIFI_MSG)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["Latitude"], 40.7128)
+        self.assertEqual(result["Longitude"], -74.006)
+        self.assertEqual(result["AltitudeGeo"], 120.5)
+        self.assertEqual(result["SpeedHorizontal"], 8.25)
+        self.assertEqual(result["Direction"], 270.0)
+        self.assertEqual(result["BasicID"], "DRONE-SN-001")
+        self.assertEqual(result["data"]["type"], "WiFi beacon")
+        self.assertEqual(result["data"]["MAC address"], "fa:0b:bc:12:34:56")
+        self.assertEqual(result["data"]["RSSI"], -68)
+        self.assertEqual(result["data"]["timestamp"], 1745000000000)
+
+    def test_id_null_falls_back_to_mac(self):
+        msg = dict(self.WIFI_MSG, id=None, radio="ble_legacy")
+        result = dronecot.parse_udp_rid_message(msg)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["BasicID"], "fa:0b:bc:12:34:56")
+        self.assertEqual(result["data"]["type"], "BLE legacy")
+
+    def test_ble_long_range_radio_type(self):
+        msg = dict(self.WIFI_MSG, radio="ble_long_range", id="SN-999")
+        result = dronecot.parse_udp_rid_message(msg)
+        self.assertEqual(result["data"]["type"], "BLE long range")
+
+    def test_no_position_returns_none(self):
+        self.assertIsNone(dronecot.parse_udp_rid_message(
+            {"t": 1, "mac": "aa:bb:cc:dd:ee:ff", "radio": "ble"}
+        ))
+
+    def test_line_parser_valid_json(self):
+        import json
+        line = json.dumps(self.WIFI_MSG)
+        result = dronecot.parse_udp_rid_line(line)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["BasicID"], "DRONE-SN-001")
+
+    def test_line_parser_invalid_json(self):
+        self.assertIsNone(dronecot.parse_udp_rid_line("not json"))
+
+    def test_line_parser_empty(self):
+        self.assertIsNone(dronecot.parse_udp_rid_line(""))
+
+    def test_cot_roundtrip(self):
+        """End-to-end: parse_udp_rid_message → rid_uas_to_cot_xml produces valid CoT."""
+        pl = dronecot.parse_udp_rid_message(self.WIFI_MSG)
+        config = {"COT_STALE": "600", "COT_HOST_ID": "test_host"}
+        cot = dronecot.functions.rid_uas_to_cot_xml(pl, config)
+        self.assertIsNotNone(cot)
+        self.assertEqual(cot.get("uid"), "RID.DRONE-SN-001.uas")
+        self.assertEqual(cot.get("type"), "a-n-A-M-H-Q")
+        point = cot.find("point")
+        self.assertEqual(point.get("lat"), "40.7128")
+        self.assertEqual(point.get("lon"), "-74.006")
+
+
 if __name__ == "__main__":
     unittest.main()

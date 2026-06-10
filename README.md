@@ -21,6 +21,7 @@ DroneCOT supports multiple drone detection sensor feeds, making it suitable for 
 | `wifi://` | Wi-Fi Beacon + NAN (802.11) | Linux monitor-mode wireless adapter |
 | `ble://` | Bluetooth Low Energy (BLE) | Sniffle-compatible BLE sniffer dongle |
 | `wireless://` | Wi-Fi + BLE combined | Both Wi-Fi and BLE simultaneously |
+| `udp://` | Pre-decoded Wi-Fi / BLE JSON (UDP 9999) | Drone detection nodes broadcasting JSONL |
 | `tcp://…:41030` | DJI AntSDR binary frames | AntSDR E200 (DJI Drone ID, port 41030) |
 | `tcp://…:52002` | DJI AntSDR text CSV | AntSDR E200 text output (port 52002) |
 | TCP listener | Scanner-push mode | Remote scanner connects to DroneCOT |
@@ -87,6 +88,9 @@ FEED_URL = serial:///dev/ttyACM0:115200
 
 # Both Wi-Fi and BLE
 # FEED_URL = wireless://wlan0
+
+# Pre-decoded Remote ID JSON over UDP (port 9999)
+# FEED_URL = udp://0.0.0.0:9999
 
 # DJI AntSDR binary (port 41030)
 # FEED_URL = tcp://192.168.1.10:41030

@@ -37,6 +37,7 @@ import pytz
 
 from .dji_functions import parse_frame, parse_data
 from .dji_text_parser import dji_parse_text_line
+from .udp_rid import parse_udp_rid_message, parse_udp_rid_line
 from .constants import (
     DEFAULT_DJI_COT_TYPE,
     DEFAULT_DJI_SENSOR_LAT,
@@ -55,6 +56,8 @@ from .constants import (
     DEFAULT_DJI_MAX_HORIZONTAL_SPEED,
     DEFAULT_DJI_FEED_URL,
     DEFAULT_DJI_TEXT_PORT,
+    DEFAULT_UDP_RID_PORT,
+    DEFAULT_UDP_RID_HOST,
 )
 
 _DJI_Logger = logging.getLogger(__name__)
@@ -91,10 +94,16 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     if "wireless" in feed_url:
         tasks.add(dronecot.WifiWorker(net_queue, config))
         tasks.add(dronecot.BleWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif "wifi" in feed_url:
         tasks.add(dronecot.WifiWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif "ble" in feed_url:
         tasks.add(dronecot.BleWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
+    elif parsed.scheme == "udp" or config.get("UDP_RID_PORT"):
+        tasks.add(dronecot.UDPRIDWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif parsed.scheme == "mqtt" or "mqtt" in feed_url:
         tasks.add(dronecot.MQTTWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))

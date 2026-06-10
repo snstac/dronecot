@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-"""Drone Open Remote ID to TAK Gateway (with DJI Drone ID support)."""
+"""Drone Open Remote ID to TAK Gateway (with DJI Drone ID and UDP Remote ID support)."""
 
 
 from .constants import (  # NOQA
@@ -36,6 +36,9 @@ from .constants import (  # NOQA
     DEFAULT_OP_COT_TYPE,
     DEFAULT_HOME_COT_TYPE,
     DEFAULT_UAS_COT_TYPE,
+    # UDP pre-decoded Remote ID constants
+    DEFAULT_UDP_RID_PORT,
+    DEFAULT_UDP_RID_HOST,
     # DJI Drone ID constants
     DEFAULT_DJI_FEED_URL,
     DEFAULT_DJI_TEXT_FEED_URL,
@@ -68,6 +71,11 @@ from .functions import (  # NOQA
     dji_handle_parsed_data,
 )
 
+from .udp_rid import (  # NOQA
+    parse_udp_rid_message,
+    parse_udp_rid_line,
+)
+
 from .classes import (  # NOQA
     BleWorker,
     MQTTWorker,
@@ -75,6 +83,8 @@ from .classes import (  # NOQA
     RXMockWorker,
     SerialWorker,
     WifiWorker,
+    # UDP pre-decoded Remote ID worker
+    UDPRIDWorker,
     # DJI Drone ID workers
     DJIWorker,
     DJINetWorker,

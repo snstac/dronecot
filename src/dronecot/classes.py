@@ -746,3 +746,59 @@ BinaryNetWorker = DJINetWorker
 TextNetWorker = DJITextWorker
 FileReplayWorker = DJIFileWorker
 TCPListenerWorker = DJIListenerWorker
+
+
+# ---------------------------------------------------------------------------
+# UDP pre-decoded Remote ID receiver
+# ---------------------------------------------------------------------------
+
+class UDPRIDWorker(pytak.QueueWorker):
+    """Receive pre-decoded Remote ID JSON datagrams over UDP (default port 9999).
+
+    Listens for flat JSONL datagrams from drone detection nodes that decode
+    ASTM F3411 Remote ID payloads locally and broadcast them on the LAN.
+    Each datagram is normalised into a RIDWorker-compatible dict.
+    """
+
+    def __init__(self, queue: asyncio.Queue, config) -> None:
+        super().__init__(queue, config)
+        self.config = config
+
+    async def run(self, _=-1) -> None:
+        from .udp_rid import parse_udp_rid_line
+
+        bind_host = str(self.config.get("UDP_RID_HOST", dronecot.DEFAULT_UDP_RID_HOST))
+        bind_port = int(self.config.get("UDP_RID_PORT", dronecot.DEFAULT_UDP_RID_PORT))
+
+        loop = asyncio.get_running_loop()
+        worker = self
+
+        class _Proto(asyncio.DatagramProtocol):
+            def datagram_received(self, data, addr):
+                try:
+                    text = data.decode("utf-8", errors="replace")
+                except Exception:
+                    return
+                pl = parse_udp_rid_line(text, worker.config)
+                if pl:
+                    asyncio.run_coroutine_threadsafe(worker.put_queue(pl), loop)
+
+            def error_received(self, exc):
+                worker._logger.warning("UDPRIDWorker error: %s", exc)
+
+        transport, _ = await loop.create_datagram_endpoint(
+            _Proto,
+            local_addr=(bind_host, bind_port),
+            allow_broadcast=True,
+        )
+        self._logger.info(
+            "UDPRIDWorker listening on UDP %s:%s",
+            bind_host, bind_port,
+        )
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            transport.close()
