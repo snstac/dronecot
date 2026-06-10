@@ -261,11 +261,10 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
     op_id = data.get("OperatorID", uasid)
 
-    # To match Drone Hone UID format:
-    mac_address = data.get("MAC address")
+    mac_address = src_data.get("MAC address")
     mac_address_text = str(mac_address or "")
-    cot_uid = f"{mac_address or uasid}"
-    op_uid = f"op-{mac_address or uasid}"
+    cot_uid = f"RID.{uasid}.uas"
+    op_uid = f"op-{uasid}"
 
     cot_type: str = config.get("UAS_COT_TYPE", dronecot.DEFAULT_UAS_COT_TYPE)
     cot_stale: int = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))

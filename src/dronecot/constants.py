@@ -42,9 +42,9 @@ DEFAULT_SENSOR_ID: str = f"dronecot_{hostname}"
 DEFAULT_SENSOR_PAYLOAD_TYPE: str = "Unknown-Sensor-Payload-Type"
 
 DEFAULT_SENSOR_COT_TYPE: str = "a-f-G-E-S-E"
-DEFAULT_OP_COT_TYPE: str = "a-u-G"
-DEFAULT_UAS_COT_TYPE: str = "a-u-A-M-H-Q"
-DEFAULT_HOME_COT_TYPE: str = "a-u-G"
+DEFAULT_OP_COT_TYPE: str = "a-n-G"
+DEFAULT_UAS_COT_TYPE: str = "a-n-A-M-H-Q"
+DEFAULT_HOME_COT_TYPE: str = "a-n-G"
 
 # DJI Drone ID (AntSDR) constants
 DEFAULT_DJI_FEED_URL: str = "tcp://192.168.1.10:41030"

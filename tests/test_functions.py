@@ -18,7 +18,6 @@
 
 import json
 import os
-import random
 import unittest
 
 import xml.etree.ElementTree as ET
@@ -28,55 +27,20 @@ import dronecot
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def load_random_test_data(file_path):
-    json_obj = None
-    topic = "test"
-
-    with open(file_path, "r", encoding="utf-8") as file:
-        _payload = file.readlines()
-        payload = random.choice(_payload)
-
-        json_end_position = 0
-        while json_end_position != -1:
-            message_payload = payload
-
-            # Look for the next JSON object in the payload, which is (sometimes)
-            # separated by "}{". If found, split the payload at that position.
-            json_end_position = payload.find("}{")
-            if json_end_position != -1:
-                message_payload = payload[0 : json_end_position + 1]
-                # Start payload over at the next JSON object
-                payload = payload[json_end_position + 1 :]
-
-            json_obj = json.loads(message_payload)
-            json_obj["topic"] = topic
-
-    return json_obj
-
-
 def load_sample_data(file_path, line=0):
-    json_obj = None
     topic = "test"
 
     with open(f"{THIS_DIR}/{file_path}", "r", encoding="utf-8") as file:
-        _payload = file.readlines()
-        payload = _payload[line]
+        raw = file.read()
 
-        json_end_position = 0
-        while json_end_position != -1:
-            message_payload = payload
+    try:
+        parsed = json.loads(raw)
+        json_obj = parsed[line] if isinstance(parsed, list) else parsed
+    except json.JSONDecodeError:
+        # NDJSON: one JSON object per line
+        json_obj = json.loads(raw.splitlines()[line])
 
-            # Look for the next JSON object in the payload, which is (sometimes)
-            # separated by "}{". If found, split the payload at that position.
-            json_end_position = payload.find("}{")
-            if json_end_position != -1:
-                message_payload = payload[0 : json_end_position + 1]
-                # Start payload over at the next JSON object
-                payload = payload[json_end_position + 1 :]
-
-            json_obj = json.loads(message_payload)
-            json_obj["topic"] = topic
-
+    json_obj["topic"] = topic
     return json_obj
 
 
@@ -84,9 +48,6 @@ class FunctionsTestCase(unittest.TestCase):
     """
     Test class for functions... functions.
     """
-
-    def setUp(self):
-        self.test_data = load_random_test_data("data/WiFi.json")
 
     def test_wifi_nan_et(self):
         sample_data = load_sample_data("data/WiFi-NaN.json")
