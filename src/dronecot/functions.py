@@ -78,12 +78,17 @@ def _dji_feed_uses_text(config, feed_url: str, parsed) -> bool:
 def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Worker,]:
     """Create specific coroutine task set for this application.
 
-    Routes based on FEED_URL scheme:
-      mqtt://    -> MQTTWorker   + RIDWorker  (Open Drone ID via MQTT)
-      serial://  -> SerialWorker + RIDWorker  (MAVLink Open Drone ID)
-      tcp://     -> DJI*Worker  + DJIWorker   (DJI AntSDR binary or text)
-      file://    -> DJIFileWorker + DJIWorker  (DJI offline replay)
-    DJI_TCP_PORT set -> DJIListenerWorker + DJIWorker (scanner-push mode)
+    Routes based on explicit config keys first, then FEED_URL scheme:
+      DJI_TCP_PORT set -> DJIListenerWorker + DJIWorker (scanner-push listener)
+      UDP_RID_PORT set -> UDPRIDWorker + RIDWorker (pre-decoded RID JSON)
+      wireless://  -> WifiWorker + BleWorker + RIDWorker
+      wifi://      -> WifiWorker + RIDWorker
+      ble://       -> BleWorker + RIDWorker
+      udp://       -> UDPRIDWorker + RIDWorker
+      mqtt://      -> MQTTWorker + RIDWorker
+      serial://    -> SerialWorker + RIDWorker  (default when no key/scheme set)
+      tcp://       -> DJI*Worker + DJIWorker  (AntSDR connect-out)
+      file://      -> DJIFileWorker + DJIWorker (offline replay)
     """
     tasks = set()
     net_queue: asyncio.Queue = asyncio.Queue()
@@ -91,7 +96,13 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     feed_url = str(config.get("FEED_URL", dronecot.DEFAULT_FEED_URL)).lower()
     parsed = urlparse(feed_url)
 
-    if "wireless" in feed_url:
+    if config.get("DJI_TCP_PORT"):
+        tasks.add(dronecot.DJIListenerWorker(net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, config, net_queue))
+    elif parsed.scheme == "udp" or config.get("UDP_RID_PORT"):
+        tasks.add(dronecot.UDPRIDWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
+    elif "wireless" in feed_url:
         tasks.add(dronecot.WifiWorker(net_queue, config))
         tasks.add(dronecot.BleWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
@@ -101,18 +112,12 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     elif "ble" in feed_url:
         tasks.add(dronecot.BleWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
-    elif parsed.scheme == "udp" or config.get("UDP_RID_PORT"):
-        tasks.add(dronecot.UDPRIDWorker(net_queue, config))
-        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif parsed.scheme == "mqtt" or "mqtt" in feed_url:
         tasks.add(dronecot.MQTTWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif parsed.scheme == "serial" or "serial" in feed_url:
         tasks.add(dronecot.SerialWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
-    elif config.get("DJI_TCP_PORT"):
-        tasks.add(dronecot.DJIListenerWorker(net_queue, config))
-        tasks.add(dronecot.DJIWorker(clitool.tx_queue, config, net_queue))
     elif parsed.scheme == "tcp":
         if _dji_feed_uses_text(config, feed_url, parsed):
             tasks.add(dronecot.DJITextWorker(net_queue, config))

@@ -1,3 +1,11 @@
+## DroneCOT 2.1.2
+
+- Fix: `DJI_TCP_PORT` and `UDP_RID_PORT` config keys now take precedence over `FEED_URL` in `create_tasks` routing, eliminating the need to set `FEED_URL=` when using the DJI listener or UDP Remote ID worker without an explicit feed URL.
+
+## DroneCOT 2.1.1
+
+- Fix: `DJIWorker` argument order in `create_tasks` (`net_queue` and `config` were swapped in all three call sites).
+
 ## DroneCOT 2.1.0
 
 - Add `UDPRIDWorker`: UDP listener (default port 9999) for pre-decoded Wi-Fi / BLE Remote ID JSON broadcasts from drone detection nodes.
