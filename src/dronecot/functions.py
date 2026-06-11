@@ -133,6 +133,8 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     if config.get("ENABLE_RX_MOCK", "0") == "1":
         tasks.add(dronecot.RXMockWorker(clitool.rx_queue, config))
 
+    tasks.add(dronecot.SensorWorker(clitool.tx_queue, config))
+
     return tasks
 
 
@@ -843,3 +845,55 @@ def dji_handle_frame(
         _DJI_Logger.warning("Error parsing DJI data: %s", exc)
         return []
     return dji_handle_parsed_data(parsed_data, config)
+
+
+def gen_sensor_cot(
+    config: Union[SectionProxy, dict, None] = None,
+    lat: float = 0.0,
+    lon: float = 0.0,
+    hae: float = 0.0,
+    ce: str = "9999999.0",
+    le: str = "9999999.0",
+) -> Optional[ET.Element]:
+    """Generate a periodic sensor beacon CoT event (a-f-G-E-S-E).
+
+    Position sourced from caller: gpsd, static config, or null island.
+    ce/le are '9999999.0' when accuracy is unknown.
+    """
+    config = config or {}
+    sensor_id = config.get("SENSOR_ID", dronecot.DEFAULT_SENSOR_ID)
+    cot_type = config.get("SENSOR_COT_TYPE", dronecot.DEFAULT_SENSOR_COT_TYPE)
+    cot_stale = int(config.get("COT_STALE", pytak.DEFAULT_COT_STALE))
+    callsign = config.get("SENSOR_CALLSIGN", sensor_id)
+    payload_type = config.get("SENSOR_PAYLOAD_TYPE", dronecot.DEFAULT_SENSOR_PAYLOAD_TYPE)
+
+    contact = ET.Element("contact")
+    contact.set("callsign", callsign)
+
+    cuas = ET.Element("__cuas")
+    cuas.set("sensor_id", sensor_id)
+    cuas.set("type", payload_type)
+
+    detail = ET.Element("detail")
+    detail.append(contact)
+    detail.append(cuas)
+
+    cot = pytak.gen_cot_xml(
+        lat=str(lat),
+        lon=str(lon),
+        hae=str(hae),
+        ce=ce,
+        le=le,
+        uid=f"SENSOR.{sensor_id}",
+        cot_type=cot_type,
+        stale=cot_stale,
+    )
+    cot.set("how", "m-g")
+    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
+
+    _detail = cot.find("detail")
+    if _detail is not None:
+        cot.remove(_detail)
+    cot.append(detail)
+
+    return cot

@@ -54,6 +54,11 @@ from .constants import (  # NOQA
     DEFAULT_DJI_SENSOR_NAME,
     DEFAULT_DJI_SENSOR_TYPE,
     DEFAULT_DJI_SENSOR_COT_TYPE,
+    # Sensor keep-alive constants
+    DEFAULT_SENSOR_KEEPALIVE_PERIOD,
+    DEFAULT_SENSOR_LAT,
+    DEFAULT_SENSOR_LON,
+    DEFAULT_SENSOR_HAE,
 )
 
 from .functions import (  # NOQA
@@ -69,6 +74,7 @@ from .functions import (  # NOQA
     dji_handle_frame,
     dji_handle_text_line,
     dji_handle_parsed_data,
+    gen_sensor_cot,
 )
 
 from .udp_rid import (  # NOQA
@@ -97,6 +103,7 @@ from .classes import (  # NOQA
     TextNetWorker,
     FileReplayWorker,
     TCPListenerWorker,
+    SensorWorker,
 )
 
 from .dji_exceptions import (  # NOQA

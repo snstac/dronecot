@@ -1,3 +1,11 @@
+## DroneCOT 2.2.0
+
+- Add `SensorWorker`: periodic `a-f-G-E-S-E` sensor CoT heartbeat, emitted every `SENSOR_KEEPALIVE_PERIOD` seconds (default 30).
+- Position sourced from system gpsd if present (mode 2/3 fix); falls back to static `SENSOR_LAT`/`SENSOR_LON`/`SENSOR_HAE` config; falls back to null island (0, 0, 0).
+- Add `gen_sensor_cot()`: reusable CoT generator for sensor beacon events, used by `SensorWorker`.
+- New constants: `DEFAULT_SENSOR_KEEPALIVE_PERIOD = 30`, `DEFAULT_SENSOR_LAT/LON/HAE = 0.0`.
+- Add `gpsd-py3` as optional runtime dependency (soft import, gracefully absent).
+
 ## DroneCOT 2.1.5
 
 - Add `takproto` to postinst pip install; enables TAK Protocol v1 protobuf encoding over WebSocket when connected to TAK Server via `wss://`.

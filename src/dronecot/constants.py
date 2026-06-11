@@ -46,6 +46,12 @@ DEFAULT_OP_COT_TYPE: str = "a-n-G"
 DEFAULT_UAS_COT_TYPE: str = "a-n-A-M-H-Q"
 DEFAULT_HOME_COT_TYPE: str = "a-n-G"
 
+# Sensor keep-alive / heartbeat
+DEFAULT_SENSOR_KEEPALIVE_PERIOD: int = 30  # seconds between a-f-G-E-S-E CoT beacons
+DEFAULT_SENSOR_LAT: float = 0.0
+DEFAULT_SENSOR_LON: float = 0.0
+DEFAULT_SENSOR_HAE: float = 0.0
+
 # Pre-decoded Remote ID JSON over UDP constants
 DEFAULT_UDP_RID_PORT: int = 9999
 DEFAULT_UDP_RID_HOST: str = "0.0.0.0"
