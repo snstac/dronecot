@@ -1,3 +1,7 @@
+## DroneCOT 2.1.4
+
+- Fix packaging: `postinst` now installs `aiomqtt` and `pymavlink` via pip for Debian systems where these packages are not yet available in the distro repos.
+
 ## DroneCOT 2.1.3
 
 - Fix: make `aiomqtt` a conditional import so the package loads without it when MQTT is not used; `MQTTWorker` raises `ImportError` with a helpful message if aiomqtt is missing at runtime.

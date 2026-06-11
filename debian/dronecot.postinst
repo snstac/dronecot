@@ -70,6 +70,12 @@ then
     fi
 fi
 
+# Install pip-only runtime dependencies not yet packaged for Debian.
+# aiomqtt: required for MQTT feeds.
+# pymavlink: required for MAVLink serial feeds.
+pip3 install --quiet --break-system-packages aiomqtt pymavlink 2>/dev/null || \
+  echo "Note: could not install aiomqtt/pymavlink via pip; install manually if needed."
+
 systemctl enable dronecot.service
 
 echo "---- dronecot Install Complete ----"
