@@ -1,3 +1,7 @@
+## DroneCOT 2.1.5
+
+- Add `takproto` to postinst pip install; enables TAK Protocol v1 protobuf encoding over WebSocket when connected to TAK Server via `wss://`.
+
 ## DroneCOT 2.1.4
 
 - Fix packaging: `postinst` now installs `aiomqtt` and `pymavlink` via pip for Debian systems where these packages are not yet available in the distro repos.

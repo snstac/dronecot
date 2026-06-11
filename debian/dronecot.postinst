@@ -73,8 +73,9 @@ fi
 # Install pip-only runtime dependencies not yet packaged for Debian.
 # aiomqtt: required for MQTT feeds.
 # pymavlink: required for MAVLink serial feeds.
-pip3 install --quiet --break-system-packages aiomqtt pymavlink 2>/dev/null || \
-  echo "Note: could not install aiomqtt/pymavlink via pip; install manually if needed."
+# takproto: enables TAK protobuf encoding over WebSocket (optional but recommended).
+pip3 install --quiet --break-system-packages aiomqtt pymavlink takproto 2>/dev/null || \
+  echo "Note: could not install aiomqtt/pymavlink/takproto via pip; install manually if needed."
 
 systemctl enable dronecot.service
 
