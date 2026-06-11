@@ -112,16 +112,16 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif config.get("DJI_TCP_PORT"):
         tasks.add(dronecot.DJIListenerWorker(net_queue, config))
-        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, config, net_queue))
     elif parsed.scheme == "tcp":
         if _dji_feed_uses_text(config, feed_url, parsed):
             tasks.add(dronecot.DJITextWorker(net_queue, config))
         else:
             tasks.add(dronecot.DJINetWorker(net_queue, config))
-        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, config, net_queue))
     elif parsed.scheme == "file":
         tasks.add(dronecot.DJIFileWorker(net_queue, config))
-        tasks.add(dronecot.DJIWorker(clitool.tx_queue, net_queue, config))
+        tasks.add(dronecot.DJIWorker(clitool.tx_queue, config, net_queue))
     else:
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
 
