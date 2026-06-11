@@ -31,7 +31,11 @@ from typing import Optional, Union
 from urllib.parse import urlparse
 
 import lzma
-import aiomqtt
+
+try:
+    import aiomqtt
+except ImportError:
+    aiomqtt = None  # type: ignore[assignment]
 
 import pytak
 import dronecot
@@ -166,21 +170,15 @@ class MQTTWorker(pytak.QueueWorker):
         super().__init__(queue, config)
         self.sensor_positions = {}
 
-    async def handle_data(self, data: Union[dict, aiomqtt.Message]) -> None:
-        """Handle Open Drone ID message from MQTT.
-
-        Parameters
-        ----------
-        data : `list[dict, aiomqtt.Message]`
-            List of craft data as key/value arrays.
-        """
+    async def handle_data(self, data) -> None:
+        """Handle Open Drone ID message from MQTT."""
         self._logger.debug("Handling data: %s", data)
-        if isinstance(data, aiomqtt.Message):
+        if aiomqtt and isinstance(data, aiomqtt.Message):
             await self.parse_message(data)
         else:
             self._logger.error("Received unexpected data type: %s", type(data))
 
-    async def parse_message(self, message: aiomqtt.Message):
+    async def parse_message(self, message):
         """Parse Open Drone ID message from MQTT."""
         self._logger.debug("Parsing message: %s", message)
 
@@ -336,6 +334,10 @@ class MQTTWorker(pytak.QueueWorker):
 
     async def run(self, _=-1) -> None:
         """Run this Thread, Reads from Pollers."""
+        if not aiomqtt:
+            raise ImportError(
+                "aiomqtt is required for MQTT support: pip install aiomqtt"
+            )
         self._logger.info("Running MQTTWorker")
 
         # This must be unique per client, so use the sensor ID

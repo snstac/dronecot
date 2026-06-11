@@ -1,3 +1,7 @@
+## DroneCOT 2.1.3
+
+- Fix: make `aiomqtt` a conditional import so the package loads without it when MQTT is not used; `MQTTWorker` raises `ImportError` with a helpful message if aiomqtt is missing at runtime.
+
 ## DroneCOT 2.1.2
 
 - Fix: `DJI_TCP_PORT` and `UDP_RID_PORT` config keys now take precedence over `FEED_URL` in `create_tasks` routing, eliminating the need to set `FEED_URL=` when using the DJI listener or UDP Remote ID worker without an explicit feed URL.
