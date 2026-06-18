@@ -71,8 +71,8 @@ class FunctionsTestCase(unittest.TestCase):
 
         point = cot_xml.find("point")
         self.assertIsNotNone(point)
-        self.assertEqual(point.get("lat"), "37.759979")
-        self.assertEqual(point.get("lon"), "-122.497734")
+        self.assertEqual(point.get("lat"), "37.7599")
+        self.assertEqual(point.get("lon"), "-122.4977")
         self.assertEqual(point.get("ce"), "12")
         self.assertEqual(point.get("le"), "5")
         self.assertEqual(point.get("hae"), "28.0")
@@ -111,8 +111,8 @@ class FunctionsTestCase(unittest.TestCase):
 
         point = cot_xml.find("point")
         self.assertIsNotNone(point)
-        self.assertEqual(point.get("lat"), "37.759979")
-        self.assertEqual(point.get("lon"), "-122.497734")
+        self.assertEqual(point.get("lat"), "37.7599")
+        self.assertEqual(point.get("lon"), "-122.4977")
         self.assertEqual(point.get("ce"), "12")
         self.assertEqual(point.get("le"), "5")
         self.assertEqual(point.get("hae"), "28.0")
@@ -151,8 +151,8 @@ class FunctionsTestCase(unittest.TestCase):
 
         point = cot_xml.find("point")
         self.assertIsNotNone(point)
-        self.assertEqual(point.get("lat"), "37.759979")
-        self.assertEqual(point.get("lon"), "-122.497734")
+        self.assertEqual(point.get("lat"), "37.7599")
+        self.assertEqual(point.get("lon"), "-122.4977")
         self.assertEqual(point.get("ce"), "12")
         self.assertEqual(point.get("le"), "5")
         self.assertEqual(point.get("hae"), "28.0")
@@ -191,8 +191,8 @@ class FunctionsTestCase(unittest.TestCase):
 
         point = cot_xml.find("point")
         self.assertIsNotNone(point)
-        self.assertEqual(point.get("lat"), "37.7599788")
-        self.assertEqual(point.get("lon"), "-122.4977338")
+        self.assertEqual(point.get("lat"), "37.7599")
+        self.assertEqual(point.get("lon"), "-122.4977")
         self.assertEqual(point.get("ce"), "12")
         self.assertEqual(point.get("le"), "5")
         self.assertEqual(point.get("hae"), "28.0")

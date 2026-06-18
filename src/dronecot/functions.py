@@ -219,8 +219,8 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
     detail.append(remarks)
 
     cot_d = {
-        "lat": str(lat),
-        "lon": str(lon),
+        "lat": lat,
+        "lon": lon,
         "ce": str(data.get("HorizAccuracy", "9999999.0")),
         "le": str(data.get("VertAccuracy", "9999999.0")),
         "hae": str(data.get("OperatorAltitudeGeo", "9999999.0")),
@@ -406,8 +406,8 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     detail.append(remarks)
 
     cot_d = {
-        "lat": str(lat),
-        "lon": str(lon),
+        "lat": lat,
+        "lon": lon,
         "ce": str(data.get("HorizAccuracy", "9999999.0")),
         "le": str(data.get("VertAccuracy", "9999999.0")),
         "hae": str(data.get("AltitudeGeo", "9999999.0")),
@@ -495,8 +495,8 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     detail.append(remarks)
 
     cot_d = {
-        "lat": str(lat),
-        "lon": str(lon),
+        "lat": lat,
+        "lon": lon,
         "ce": str(data.get("HorizAccuracy", "9999999.0")),
         "le": str(data.get("VertAccuracy", "9999999.0")),
         "hae": hae,
@@ -704,8 +704,8 @@ def gen_dji_cot(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-m
     detail.append(crumbs)
 
     cot_d = {
-        "lat": str(lat),
-        "lon": str(lon),
+        "lat": lat,
+        "lon": lon,
         "ce": ce,
         "le": str(data.get("nac_v", "9999999.0")),
         "hae": str(data.get("alt_geom", "9999999.0")),
@@ -763,8 +763,8 @@ def dji_sensor_to_cot(
     detail.append(cuas)
 
     cot_d = {
-        "lat": str(lat),
-        "lon": str(lon),
+        "lat": lat,
+        "lon": lon,
         "ce": str(config.get("SENSOR_CE", DEFAULT_DJI_SENSOR_CE)),
         "le": str(config.get("SENSOR_LE", DEFAULT_DJI_SENSOR_LE)),
         "hae": str(config.get("SENSOR_HAE", DEFAULT_DJI_SENSOR_HAE)),
@@ -879,8 +879,8 @@ def gen_sensor_cot(
     detail.append(cuas)
 
     cot = pytak.gen_cot_xml(
-        lat=str(lat),
-        lon=str(lon),
+        lat=lat,
+        lon=lon,
         hae=str(hae),
         ce=ce,
         le=le,
