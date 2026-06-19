@@ -1,3 +1,9 @@
+## DroneCOT 2.2.1
+
+- Use PyTAK shared CoT event, point, detail, remarks, and serialization helpers.
+- Replace `pytz` timestamp handling with standard-library timezone handling.
+- Require `pytak >= 7.3.12`.
+
 ## DroneCOT 2.2.0
 
 - Add `SensorWorker`: periodic `a-f-G-E-S-E` sensor CoT heartbeat, emitted every `SENSOR_KEEPALIVE_PERIOD` seconds (default 30).

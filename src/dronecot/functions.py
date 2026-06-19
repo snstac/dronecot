@@ -29,11 +29,11 @@ import xml.etree.ElementTree as ET
 from configparser import SectionProxy
 from typing import Optional, Set, Union
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytak
 import dronecot
 from datetime import datetime
-import pytz
 
 from .dji_functions import parse_frame, parse_data
 from .dji_text_parser import dji_parse_text_line
@@ -63,6 +63,15 @@ from .constants import (
 _DJI_Logger = logging.getLogger(__name__)
 
 APP_NAME = "dronecot"
+
+
+def _pacific_timestamp() -> str:
+    """Return a human-readable last-seen timestamp, falling back if tzdata is absent."""
+    try:
+        tzinfo = ZoneInfo("US/Pacific")
+    except ZoneInfoNotFoundError:
+        tzinfo = datetime.now().astimezone().tzinfo
+    return datetime.now(tzinfo).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
 def _dji_feed_uses_text(config, feed_url: str, parsed) -> bool:
@@ -136,6 +145,31 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     tasks.add(dronecot.SensorWorker(clitool.tx_queue, config))
 
     return tasks
+
+
+def _cot_event_with_detail(
+    *,
+    uid: str,
+    cot_type: str,
+    stale,
+    lat,
+    lon,
+    hae,
+    ce,
+    le,
+    detail: ET.Element,
+    config: Union[SectionProxy, dict],
+    cot_host_id: str,
+) -> ET.Element:
+    """Build a standard CoT event around DroneCOT-specific detail children."""
+    return pytak.cot_event(
+        uid=uid,
+        cot_type=cot_type,
+        stale=stale,
+        point=pytak.cot_point(lat=lat, lon=lon, ce=ce, hae=hae, le=le),
+        detail=pytak.cot_detail(*list(detail), flow_tag_host_id=cot_host_id),
+        access=config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS),
+    )
 
 
 def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -218,26 +252,19 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
     remarks.text = _remarks
     detail.append(remarks)
 
-    cot_d = {
-        "lat": lat,
-        "lon": lon,
-        "ce": str(data.get("HorizAccuracy", "9999999.0")),
-        "le": str(data.get("VertAccuracy", "9999999.0")),
-        "hae": str(data.get("OperatorAltitudeGeo", "9999999.0")),
-        "uid": cot_uid,
-        "cot_type": cot_type,
-        "stale": cot_stale,
-    }
-    cot = pytak.gen_cot_xml(**cot_d)
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.findall("detail")[0]
-    flowtags = _detail.findall("_flow-tags_")
-    detail.extend(flowtags)
-    cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
+    return _cot_event_with_detail(
+        uid=cot_uid,
+        cot_type=cot_type,
+        stale=cot_stale,
+        lat=lat,
+        lon=lon,
+        ce=str(data.get("HorizAccuracy", "9999999.0")),
+        le=str(data.get("VertAccuracy", "9999999.0")),
+        hae=str(data.get("OperatorAltitudeGeo", "9999999.0")),
+        detail=detail,
+        config=config,
+        cot_host_id=cot_host_id,
+    )
 
 
 def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -287,8 +314,7 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     cot_host_id: str = config.get("COT_HOST_ID", pytak.DEFAULT_HOST_ID)
 
     # Show last-seen time in Pacific Time Zone in remarks
-    pacific = pytz.timezone('US/Pacific')
-    pacific_time = datetime.now(pacific).strftime('%Y-%m-%d %H:%M:%S %Z')
+    pacific_time = _pacific_timestamp()
     remarks_fields.append(f"Last Seen (Pacific): {pacific_time}")
 
     remarks_fields.append(f"Remote ID: {uasid}")
@@ -405,26 +431,19 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     remarks.text = _remarks
     detail.append(remarks)
 
-    cot_d = {
-        "lat": lat,
-        "lon": lon,
-        "ce": str(data.get("HorizAccuracy", "9999999.0")),
-        "le": str(data.get("VertAccuracy", "9999999.0")),
-        "hae": str(data.get("AltitudeGeo", "9999999.0")),
-        "uid": cot_uid,
-        "cot_type": cot_type,
-        "stale": cot_stale,
-    }
-    cot = pytak.gen_cot_xml(**cot_d)
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.findall("detail")[0]
-    flowtags = _detail.findall("_flow-tags_")
-    detail.extend(flowtags)
-    cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
+    return _cot_event_with_detail(
+        uid=cot_uid,
+        cot_type=cot_type,
+        stale=cot_stale,
+        lat=lat,
+        lon=lon,
+        ce=str(data.get("HorizAccuracy", "9999999.0")),
+        le=str(data.get("VertAccuracy", "9999999.0")),
+        hae=str(data.get("AltitudeGeo", "9999999.0")),
+        detail=detail,
+        config=config,
+        cot_host_id=cot_host_id,
+    )
 
 
 def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -494,26 +513,19 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
     remarks.text = _remarks
     detail.append(remarks)
 
-    cot_d = {
-        "lat": lat,
-        "lon": lon,
-        "ce": str(data.get("HorizAccuracy", "9999999.0")),
-        "le": str(data.get("VertAccuracy", "9999999.0")),
-        "hae": hae,
-        "uid": cot_uid,
-        "cot_type": cot_type,
-        "stale": cot_stale,
-    }
-    cot = pytak.gen_cot_xml(**cot_d)
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.findall("detail")[0]
-    flowtags = _detail.findall("_flow-tags_")
-    detail.extend(flowtags)
-    cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
+    return _cot_event_with_detail(
+        uid=cot_uid,
+        cot_type=cot_type,
+        stale=cot_stale,
+        lat=lat,
+        lon=lon,
+        ce=str(data.get("HorizAccuracy", "9999999.0")),
+        le=str(data.get("VertAccuracy", "9999999.0")),
+        hae=hae,
+        detail=detail,
+        config=config,
+        cot_host_id=cot_host_id,
+    )
 
 
 def xml_to_cot(
@@ -521,9 +533,7 @@ def xml_to_cot(
 ) -> Optional[bytes]:
     """Return a CoT XML object as an XML string, using the given func."""
     cot: Optional[ET.Element] = getattr(dronecot.functions, func)(data, config)
-    return (
-        b"\n".join([pytak.DEFAULT_XML_DECLARATION, ET.tostring(cot)]) if cot else None
-    )
+    return pytak.serialize_cot(cot) if cot is not None else None
 
 
 def cot_to_xml(
@@ -703,27 +713,19 @@ def gen_dji_cot(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-m
     detail.append(cuas)
     detail.append(crumbs)
 
-    cot_d = {
-        "lat": lat,
-        "lon": lon,
-        "ce": ce,
-        "le": str(data.get("nac_v", "9999999.0")),
-        "hae": str(data.get("alt_geom", "9999999.0")),
-        "uid": cot_uid,
-        "cot_type": cot_type,
-        "stale": cot_stale,
-    }
-    cot = pytak.gen_cot_xml(**cot_d)
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.find("detail")
-    if _detail is not None:
-        flowtags = _detail.findall("_flow-tags_")
-        detail.extend(flowtags)
-        cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
+    return _cot_event_with_detail(
+        uid=cot_uid,
+        cot_type=cot_type,
+        stale=cot_stale,
+        lat=lat,
+        lon=lon,
+        ce=ce,
+        le=str(data.get("nac_v", "9999999.0")),
+        hae=str(data.get("alt_geom", "9999999.0")),
+        detail=detail,
+        config=config,
+        cot_host_id=cot_host_id,
+    )
 
 
 def dji_sensor_to_cot(
@@ -762,27 +764,19 @@ def dji_sensor_to_cot(
     detail.append(contact)
     detail.append(cuas)
 
-    cot_d = {
-        "lat": lat,
-        "lon": lon,
-        "ce": str(config.get("SENSOR_CE", DEFAULT_DJI_SENSOR_CE)),
-        "le": str(config.get("SENSOR_LE", DEFAULT_DJI_SENSOR_LE)),
-        "hae": str(config.get("SENSOR_HAE", DEFAULT_DJI_SENSOR_HAE)),
-        "uid": cot_uid,
-        "cot_type": cot_type,
-        "stale": cot_stale,
-    }
-    cot = pytak.gen_cot_xml(**cot_d)
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.find("detail")
-    if _detail is not None:
-        flowtags = _detail.findall("_flow-tags_")
-        detail.extend(flowtags)
-        cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
+    return _cot_event_with_detail(
+        uid=cot_uid,
+        cot_type=cot_type,
+        stale=cot_stale,
+        lat=lat,
+        lon=lon,
+        ce=str(config.get("SENSOR_CE", DEFAULT_DJI_SENSOR_CE)),
+        le=str(config.get("SENSOR_LE", DEFAULT_DJI_SENSOR_LE)),
+        hae=str(config.get("SENSOR_HAE", DEFAULT_DJI_SENSOR_HAE)),
+        detail=detail,
+        config=config,
+        cot_host_id=cot_host_id,
+    )
 
 
 def dji_uas_to_cot(data, config: Union[SectionProxy, dict, None] = None) -> Optional[ET.Element]:
@@ -874,26 +868,12 @@ def gen_sensor_cot(
     cuas.set("sensor_id", sensor_id)
     cuas.set("type", payload_type)
 
-    detail = ET.Element("detail")
-    detail.append(contact)
-    detail.append(cuas)
-
-    cot = pytak.gen_cot_xml(
-        lat=lat,
-        lon=lon,
-        hae=str(hae),
-        ce=ce,
-        le=le,
+    return pytak.cot_event(
         uid=f"SENSOR.{sensor_id}",
         cot_type=cot_type,
         stale=cot_stale,
+        point=pytak.cot_point(lat=lat, lon=lon, hae=hae, ce=ce, le=le),
+        detail=pytak.cot_detail(contact, cuas, flow_tag=False),
+        how="m-g",
+        access=config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS),
     )
-    cot.set("how", "m-g")
-    cot.set("access", config.get("COT_ACCESS", pytak.DEFAULT_COT_ACCESS))
-
-    _detail = cot.find("detail")
-    if _detail is not None:
-        cot.remove(_detail)
-    cot.append(detail)
-
-    return cot
