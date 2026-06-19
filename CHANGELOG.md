@@ -1,3 +1,7 @@
+## DroneCOT 2.2.2
+
+- Fix UTC timestamp handling on Python 3.9 and 3.10.
+
 ## DroneCOT 2.2.1
 
 - Use PyTAK shared CoT event, point, detail, remarks, and serialization helpers.

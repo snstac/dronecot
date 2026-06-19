@@ -354,7 +354,7 @@ def parse_System(payload):
     if Timestamp != float("NaN") and Timestamp != 0:
         pl["Timestamp"] = (
             datetime.datetime.fromtimestamp(
-                (int(Timestamp) + 1546300800), datetime.UTC
+                (int(Timestamp) + 1546300800), datetime.timezone.utc
             ).strftime("%Y-%m-%d %H:%M %Z"),
         )
     pl["TimestampRaw"] = Timestamp
@@ -409,7 +409,7 @@ def parse_AuthPage(payload, page):
 
         if Timestamp != float("NaN") and Timestamp != 0:
             pl["Timestamp"] = datetime.datetime.fromtimestamp(
-                (int(Timestamp) + 1546300800), datetime.UTC
+                (int(Timestamp) + 1546300800), datetime.timezone.utc
             ).strftime("%Y-%m-%d %H:%M %Z")
 
         AuthData = payload[AuthPage_start_byte + 16 : AuthPage_start_byte + 16 + 17]
