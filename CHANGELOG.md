@@ -1,3 +1,10 @@
+## DroneCOT 2.2.3
+
+- SerialWorker: handle MAVLink **ADSB_VEHICLE** messages (in addition to
+  OPEN_DRONE_ID_MESSAGE_PACK), so Remote ID receivers that emit ADS-B-style
+  frames — e.g. the **BlueMark DroneScout Bridge (DS101)** in ADS-B output mode
+  — are decoded to CoT. Adds a test for the ADSB_VEHICLE -> RID conversion.
+
 ## DroneCOT 2.2.2
 
 - Fix UTC timestamp handling on Python 3.9 and 3.10.
