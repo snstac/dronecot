@@ -157,9 +157,16 @@ def extract_odid_from_dot11(frame_bytes: bytes) -> Optional[Tuple[bytes, Dict[st
 
 
 def extract_odid_from_scapy_packet(packet) -> Optional[Tuple[bytes, Dict[str, Any]]]:
-    """Extract ODID from a Scapy packet (Dot11 layer)."""
+    """Extract ODID from a Scapy packet (Dot11 layer).
+
+    Delegates to the byte-level ``extract_odid_from_dot11`` parser on the
+    serialized Dot11 frame. This avoids a class of Scapy field-type bugs — e.g.
+    ``Dot11EltVendorSpecific.oui`` is an int, so ``bytes(elt.oui)`` builds a huge
+    zero buffer instead of the 3 OUI bytes and the ASTM vendor element never
+    matches — and keeps Wi-Fi Beacon and NAN decoding on one proven code path.
+    """
     try:
-        from scapy.layers.dot11 import Dot11, Dot11Beacon, Dot11EltVendorSpecific, RadioTap  # noqa
+        from scapy.layers.dot11 import Dot11, RadioTap  # noqa
     except ImportError:
         return None
 
@@ -167,40 +174,14 @@ def extract_odid_from_scapy_packet(packet) -> Optional[Tuple[bytes, Dict[str, An
         return None
 
     dot11 = packet.getlayer(Dot11)
-    meta: Dict[str, Any] = {"MAC address": dot11.addr2 or dot11.addr3 or ""}
+    result = extract_odid_from_dot11(bytes(dot11))
+    if not result:
+        return None
 
-    if packet.haslayer(RadioTap) and hasattr(packet[RadioTap], "dBm_AntSignal"):
-        rssi = packet[RadioTap].dBm_AntSignal
+    pack, meta = result
+    # Enrich with Scapy-only signal info when present.
+    if packet.haslayer(RadioTap):
+        rssi = getattr(packet[RadioTap], "dBm_AntSignal", None)
         if rssi is not None:
             meta["RSSI"] = int(rssi)
-
-    subtype = dot11.subtype
-
-    if subtype == 8:  # beacon
-        elt = packet.getlayer(Dot11EltVendorSpecific)
-        while elt:
-            if hasattr(elt, "oui") and hasattr(elt, "info"):
-                oui = bytes(elt.oui) if not isinstance(elt.oui, bytes) else elt.oui
-                info = bytes(elt.info) if elt.info else b""
-                ie_data = oui + info
-                pack = parse_beacon_vendor_ie(ie_data)
-                if pack:
-                    meta["type"] = "WiFi beacon"
-                    if dot11.IDinfo:
-                        meta["channel"] = int(getattr(dot11.IDinfo, "channel", 0) or 0)
-                    return pack, meta
-            elt = elt.payload.getlayer(Dot11EltVendorSpecific)
-    elif subtype == 13:  # action
-        raw = bytes(packet[Dot11].payload) if dot11.payload else b""
-        if not raw and packet.haslayer("Raw"):
-            raw = bytes(packet["Raw"].load)
-        frame = bytes(dot11.build()) + raw if raw else bytes(packet.build())
-        # Rebuild full frame for NAN parser
-        full = bytes(packet.build())
-        result = extract_odid_from_dot11(full)
-        if result:
-            pack, nan_meta = result
-            meta.update(nan_meta)
-            return pack, meta
-
-    return None
+    return pack, meta
