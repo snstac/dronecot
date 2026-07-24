@@ -87,6 +87,35 @@ class SerialWorker(pytak.QueueWorker):
         parsed = dronecot.odid.message_pack_to_dict(messages, pack_size)
         return dronecot.rid_normalize.odid_parsed_to_rid_dict(parsed)
 
+    @staticmethod
+    def _adsb_vehicle_to_rid_dict(msg) -> dict:
+        """Convert a MAVLink ADSB_VEHICLE to a RIDWorker dict.
+
+        The DroneScout Bridge (and similar Remote ID receivers) can emit detected
+        Remote ID as MAVLink ADSB_VEHICLE instead of OPEN_DRONE_ID_MESSAGE_PACK.
+        Units: lat/lon 1e-7 deg, altitude mm, hor/ver velocity cm/s, heading cdeg.
+        Returns {} when there is no position.
+        """
+        lat = getattr(msg, "lat", 0) / 1e7
+        lon = getattr(msg, "lon", 0) / 1e7
+        if not lat and not lon:
+            return {}
+        callsign = getattr(msg, "callsign", "") or ""
+        if isinstance(callsign, bytes):
+            callsign = callsign.decode("ascii", "ignore")
+        callsign = callsign.replace("\x00", "").strip()
+        icao = int(getattr(msg, "ICAO_address", 0) or 0)
+        return {
+            "BasicID": callsign or f"ICAO-{icao:06X}",
+            "Latitude": lat,
+            "Longitude": lon,
+            "AltitudeGeo": getattr(msg, "altitude", 0) / 1000.0,  # mm -> m
+            "SpeedHorizontal": getattr(msg, "hor_velocity", 0) / 100.0,  # cm/s -> m/s
+            "SpeedVertical": getattr(msg, "ver_velocity", 0) / 100.0,
+            "Direction": getattr(msg, "heading", 0) / 100.0,  # cdeg -> deg
+            "data": {"type": "MAVLink ADSB_VEHICLE"},
+        }
+
     async def run(self, _=-1) -> None:
         """Read MAVLink messages from serial and enqueue decoded ODID payloads."""
         self._logger.info("Running SerialWorker")
@@ -154,6 +183,10 @@ class SerialWorker(pytak.QueueWorker):
                         msg.messages, msg.msg_pack_size
                     )
                     await self.put_queue(parsed_payload)
+                elif msg_type == "ADSB_VEHICLE":
+                    rid = self._adsb_vehicle_to_rid_dict(msg)
+                    if rid:
+                        await self.put_queue(rid)
                 elif msg_type == "HEARTBEAT":
                     self._logger.debug(
                         "MAVLink heartbeat received at %s",
