@@ -41,6 +41,11 @@ DEFAULT_SENSOR_ID: str = f"dronecot_{hostname}"
 
 DEFAULT_SENSOR_PAYLOAD_TYPE: str = "Unknown-Sensor-Payload-Type"
 
+# Receiver hardware model (e.g. "Atheros AR9271") and detection method /
+# capability (e.g. "Wi-Fi Open Drone ID"). Set via SENSOR_MODEL / SENSOR_TYPE.
+DEFAULT_SENSOR_MODEL: str = "Unknown-Sensor"
+DEFAULT_SENSOR_TYPE: str = "Remote ID"
+
 DEFAULT_SENSOR_COT_TYPE: str = "a-f-G-E-S-E"
 DEFAULT_OP_COT_TYPE: str = "a-n-G"
 DEFAULT_UAS_COT_TYPE: str = "a-n-A-M-H-Q"
