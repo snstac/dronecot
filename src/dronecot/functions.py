@@ -74,6 +74,19 @@ def _pacific_timestamp() -> str:
     return datetime.now(tzinfo).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
+def _rf_band(channel) -> str:
+    """Map a Wi-Fi channel number to its RF band label (for SIGINT detail)."""
+    try:
+        ch = int(channel)
+    except (TypeError, ValueError):
+        return ""
+    if 1 <= ch <= 14:
+        return "2.4 GHz"
+    if 32 <= ch <= 196:
+        return "5 GHz"
+    return ""
+
+
 def _dji_feed_uses_text(config, feed_url: str, parsed) -> bool:
     """Return True if the configured DJI feed uses AntSDR text CSV format."""
     feed_format = str(config.get("FEED_FORMAT", "")).lower()
@@ -341,10 +354,19 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     sensor_type = str(src_data.get("type", dronecot.DEFAULT_SENSOR_PAYLOAD_TYPE))
     rssi = str(src_data.get("RSSI"))
 
+    # Receiver / SIGINT detail: what hardware saw this, how, and on what RF band.
+    sensor_model = str(config.get("SENSOR_MODEL", dronecot.DEFAULT_SENSOR_MODEL))
+    sensor_method = str(config.get("SENSOR_TYPE", dronecot.DEFAULT_SENSOR_TYPE))
+    channel = src_data.get("channel")
+    band = _rf_band(channel)
+
     cuas: ET.Element = ET.Element("__cuas")
     cuas.set("sensor_id", sensor_id)
+    cuas.set("sensor_model", sensor_model)
+    cuas.set("sensor_method", sensor_method)
     cuas.set("rssi", rssi)
-    cuas.set("channel", str(src_data.get("channel")))
+    cuas.set("channel", str(channel))
+    cuas.set("band", band)
     cuas.set("timestamp", str(src_data.get("timestamp")))
     cuas.set("mac_address", mac_address_text)
     cuas.set("type", sensor_type)
@@ -374,6 +396,11 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     else:
         callsign = f"{uasid[0:4]}...{uasid[-4:]}"
 
+    if rssi and rssi not in ("None", ""):
+        remarks_fields.append(f"RSSI: {rssi} dBm")
+    if channel is not None:
+        remarks_fields.append(f"Channel: {channel}{f' ({band})' if band else ''}")
+    remarks_fields.append(f"Receiver: {sensor_model} — {sensor_method}")
     remarks_fields.append(f"Sensor: {sensor_id}")
 
     contact: ET.Element = ET.Element("contact")
