@@ -586,6 +586,24 @@ class RIDWorker(pytak.QueueWorker):
         self.net_queue = net_queue
         self.config = config
 
+        # BLE legacy advertising fits ONE 25-byte ODID message per frame, so the
+        # serial, the position and the operator location arrive in separate
+        # advertisements. Merge them per transmitter before rendering, otherwise
+        # position-less messages are dropped and position-only messages all land
+        # on a single "Unknown-BasicID_0" track. Full 0xF message packs are
+        # unaffected -- they already carry everything in one frame.
+        ttl = float(config.get("RID_TRACK_TTL", dronecot.DEFAULT_RID_TRACK_TTL))
+        self.aggregator = (
+            dronecot.rid_track.ODIDAggregator(
+                ttl=ttl,
+                max_tracks=int(
+                    config.get("RID_TRACK_MAX", dronecot.DEFAULT_RID_TRACK_MAX)
+                ),
+            )
+            if ttl > 0
+            else None
+        )
+
     async def handle_data(self, data: dict) -> None:
         """Handle Data from receiver: Render to CoT, put on TX queue.
 
@@ -601,13 +619,23 @@ class RIDWorker(pytak.QueueWorker):
             event = dronecot.cot_to_xml(data, self.config, "sensor_status_to_cot")
             if event:
                 await self.put_queue(event)
-        else:
-            self._logger.info("Processing RID data")
-            cot_funcs = ["rid_uas_to_cot_xml", "rid_op_to_cot_xml"]
-            for func in cot_funcs:
-                event = dronecot.cot_to_xml(data, self.config, func)
-                if event:
-                    await self.put_queue(event)
+            return
+
+        if self.aggregator is not None:
+            merged = self.aggregator.update(data)
+            if merged is None:
+                # Absorbed into a track that has no renderable position yet; it
+                # will contribute to the CoT rendered by a later advertisement.
+                self._logger.debug("Merged RID message, awaiting position")
+                return
+            data = merged
+
+        self._logger.info("Processing RID data")
+        cot_funcs = ["rid_uas_to_cot_xml", "rid_op_to_cot_xml"]
+        for func in cot_funcs:
+            event = dronecot.cot_to_xml(data, self.config, func)
+            if event:
+                await self.put_queue(event)
 
     async def run(self, _=-1) -> None:
         """Run the main process loop."""

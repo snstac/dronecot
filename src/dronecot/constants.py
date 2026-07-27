@@ -57,6 +57,14 @@ DEFAULT_SENSOR_LAT: float = 0.0
 DEFAULT_SENSOR_LON: float = 0.0
 DEFAULT_SENSOR_HAE: float = 0.0
 
+# Per-transmitter Remote ID track aggregation. BLE legacy advertising fits one
+# 25-byte ODID message per frame, so the serial, the position and the operator
+# location arrive in *different* advertisements and must be merged before a CoT
+# can be rendered. See rid_track.ODIDAggregator. Set RID_TRACK_TTL to 0 to
+# disable aggregation and restore per-message rendering.
+DEFAULT_RID_TRACK_TTL: float = 120.0  # seconds of silence before a track expires
+DEFAULT_RID_TRACK_MAX: int = 512  # hard cap on simultaneously tracked transmitters
+
 # Pre-decoded Remote ID JSON over UDP constants
 DEFAULT_UDP_RID_PORT: int = 9999
 DEFAULT_UDP_RID_HOST: str = "0.0.0.0"

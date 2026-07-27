@@ -27,7 +27,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 
 from configparser import SectionProxy
-from typing import Optional, Set, Union
+from typing import Optional, Set, Tuple, Union
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -185,6 +185,29 @@ def _cot_event_with_detail(
     )
 
 
+def _rid_identity(data: dict) -> Tuple[str, Optional[str]]:
+    """Resolve a stable UAS identifier and the advertiser MAC for CoT UIDs.
+
+    Wireless captures carry the MAC in the ``data`` sub-dict; MQTT and serial
+    feeds put it at the top level, so both are checked.
+
+    When no BasicID has been heard yet -- routine for BLE legacy, where the
+    serial and the position arrive in different advertisements -- fall back to
+    the MAC. The previous ``Unknown-BasicID_0`` constant gave every such
+    transmitter the SAME UID, collapsing every drone in range onto one track.
+    """
+    src_data = data.get("data") or {}
+    mac = src_data.get("MAC address") or data.get("MAC address")
+    mac = str(mac).strip() or None if mac else None
+
+    uasid = data.get("BasicID") or data.get("BasicID_0")
+    uasid = str(uasid).strip() if uasid else ""
+    if not uasid:
+        uasid = f"MAC-{mac.replace(':', '').upper()}" if mac else "Unknown-BasicID_0"
+
+    return uasid, mac
+
+
 def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches,too-many-statements
     data: dict,
     config: Union[SectionProxy, dict, None] = None,
@@ -216,11 +239,10 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
     config = config or {}
     remarks_fields: list = []
 
-    uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
+    uasid, mac_address = _rid_identity(data)
     op_id = data.get("OperatorID", f"Operator ({uasid[0:4]}...{uasid[-4:]})")
 
     # To match Drone Hone UID format:
-    mac_address = data.get("MAC address")
     mac_address_text = str(mac_address or "")
     cot_uid = f"op-{mac_address or uasid}"
 
@@ -314,10 +336,9 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
 
     extra_json = src_data.get("extra")
 
-    uasid = data.get("BasicID", data.get("BasicID_0", "Unknown-BasicID_0"))
+    uasid, mac_address = _rid_identity(data)
     op_id = data.get("OperatorID", uasid)
 
-    mac_address = src_data.get("MAC address")
     mac_address_text = str(mac_address or "")
     cot_uid = f"RID.{uasid}.uas"
     op_uid = f"op-{uasid}"
