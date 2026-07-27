@@ -39,10 +39,11 @@ Selects the input worker. DroneCOT inspects the URL scheme:
 | `wifi://wlan0` | Wi-Fi | Linux monitor mode (Beacon + NAN) |
 | `wifi+pcap:///path/file.pcapng` | Wi-Fi | Offline pcap replay |
 | `ble:///dev/ttyUSB0` or `ble://auto` | BLE | Sniffle USB dongle |
+| `ble+hci://hci0` | BLE | Onboard BlueZ adapter — no extra hardware |
 | `wireless://wlan0` | Wi-Fi + BLE | Both workers (set `BLE_SERIAL` if needed) |
 
 !!! note
-    Worker selection is based on substrings in `FEED_URL` (`wireless` is checked before `wifi`). See [Feeds](feeds.md).
+    Worker selection is based on substrings in `FEED_URL` (`wireless` is checked before `wifi`, and `ble+hci` before `ble`). See [Feeds](feeds.md).
 
 **Serial URL forms:**
 
@@ -91,6 +92,45 @@ Used when `FEED_URL` contains `ble` or `wireless`.
 | `BLE_EXTENDED` | `1` | Extended advertising |
 
 Requires [Sniffle](https://github.com/nccgroup/Sniffle) Python CLI on `PYTHONPATH`.
+
+---
+
+## BLE (onboard BlueZ adapter)
+
+Used when `FEED_URL` uses the `ble+hci://` scheme. Captures Remote ID on the
+Bluetooth radio the board already has — no Sniffle dongle, no extra hardware.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `BLE_ADAPTER` | from `FEED_URL` or `hci0` | BlueZ adapter to use |
+| `BLE_READER` | `auto` | `monitor`, `dbus`, or `auto` (see below) |
+| `BLE_RSSI_THRESHOLD` | — | Drop advertisements weaker than this (dBm) |
+
+DroneCOT always drives a continuous LE scan over BlueZ D-Bus
+(`SetDiscoveryFilter` with `Transport: le`, then `StartDiscovery`). Because that
+is an ordinary D-Bus client it **coexists with `bluetoothd` and with an active
+Bluetooth PAN** rather than seizing the adapter.
+
+Two ways to read the advertisements:
+
+- **`monitor`** — an `HCI_CHANNEL_MONITOR` socket, the same passive tap `btmon`
+  uses. Delivers every advertising report with full advertisement bytes and
+  per-frame RSSI, with nothing coalesced. Needs `CAP_NET_RAW`
+  (systemd: `AmbientCapabilities=CAP_NET_RAW`).
+- **`dbus`** — reads the `ServiceData` property off `org.bluez.Device1`. Needs no
+  elevated capability, but BlueZ may coalesce repeated advertisements. For
+  Remote ID a coalesced repeat is a lost message *type*, not a duplicate, so
+  prefer `monitor` where you can.
+- **`auto`** (default) — try `monitor`, fall back to `dbus`.
+
+Query options may also be given in the URL:
+`ble+hci://hci0?reader=monitor&rssi=-95&duplicates=1`
+
+!!! warning "Legacy advertising only"
+    This path captures **legacy** advertisements. The ASTM long-range profile
+    uses BT5 extended advertising on the Coded PHY, which the Raspberry Pi's
+    CYW43455 is not known to receive. Treat onboard capture as complementary to
+    a Sniffle dongle or a DroneScout receiver, not a replacement.
 
 ---
 

@@ -90,6 +90,7 @@ from .udp_rid import (  # NOQA
 
 from .classes import (  # NOQA
     BleWorker,
+    BlueZWorker,
     MQTTWorker,
     RIDWorker,
     RXMockWorker,
