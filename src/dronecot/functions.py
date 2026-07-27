@@ -105,7 +105,8 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
       UDP_RID_PORT set -> UDPRIDWorker + RIDWorker (pre-decoded RID JSON)
       wireless://  -> WifiWorker + BleWorker + RIDWorker
       wifi://      -> WifiWorker + RIDWorker
-      ble://       -> BleWorker + RIDWorker
+      ble://       -> BleWorker + RIDWorker  (Sniffle dongle)
+      ble+hci://   -> BlueZWorker + RIDWorker  (onboard BlueZ adapter)
       udp://       -> UDPRIDWorker + RIDWorker
       mqtt://      -> MQTTWorker + RIDWorker
       serial://    -> SerialWorker + RIDWorker  (default when no key/scheme set)
@@ -130,6 +131,10 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif "wifi" in feed_url:
         tasks.add(dronecot.WifiWorker(net_queue, config))
+        tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
+    # Must precede the generic "ble" test -- "ble+hci" contains "ble".
+    elif parsed.scheme == "ble+hci":
+        tasks.add(dronecot.BlueZWorker(net_queue, config))
         tasks.add(dronecot.RIDWorker(clitool.tx_queue, net_queue, config))
     elif "ble" in feed_url:
         tasks.add(dronecot.BleWorker(net_queue, config))

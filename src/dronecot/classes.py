@@ -577,6 +577,67 @@ class BleWorker(pytak.QueueWorker):
                 self._sniffer.stop()
 
 
+class BlueZWorker(pytak.QueueWorker):
+    """Queue Worker for BLE Open Drone ID capture on a stock BlueZ adapter.
+
+    Unlike BleWorker this needs no external dongle -- it uses the Bluetooth
+    radio the board already has. Captures legacy advertisements only; see
+    bluez_capture for the BT5 Coded PHY caveat.
+    """
+
+    def __init__(self, queue, config):
+        super().__init__(queue, config)
+        self.config = config
+        self._loop = None
+        self._sniffer = None
+
+    def _on_ble_packet(self, pack: bytes, meta: dict) -> None:
+        merged = {**dronecot.rid_normalize.uas_meta_defaults(self.config), **meta}
+        pl = dronecot.rid_normalize.bytes_to_rid_dict(pack, merged)
+        if pl and self._loop:
+            asyncio.run_coroutine_threadsafe(self.put_queue(pl), self._loop)
+
+    async def run(self, _=-1) -> None:
+        self._logger.info("Running BlueZWorker")
+        self._loop = asyncio.get_running_loop()
+
+        try:
+            from dronecot.bluez_capture import BlueZSniffer, parse_bluez_feed_url
+        except ImportError as exc:
+            self._logger.error("BlueZ capture unavailable: %s", exc)
+            return
+
+        feed = parse_bluez_feed_url(str(self.config.get("FEED_URL", "")))
+
+        adapter = self.config.get("BLE_ADAPTER") or feed.get("adapter")
+        reader = self.config.get("BLE_READER") or feed.get("reader")
+        rssi_threshold = self.config.get("BLE_RSSI_THRESHOLD")
+        if rssi_threshold is None or str(rssi_threshold) == "":
+            rssi_threshold = feed.get("rssi_threshold")
+        else:
+            rssi_threshold = int(rssi_threshold)
+
+        self._sniffer = BlueZSniffer(
+            on_packet=self._on_ble_packet,
+            adapter=adapter,
+            reader=reader,
+            rssi_threshold=rssi_threshold,
+            duplicates=feed.get("duplicates", True),
+        )
+
+        try:
+            self._sniffer.start()
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pylint: disable=broad-except
+            self._logger.error("BlueZ capture failed: %s", exc)
+        finally:
+            if self._sniffer:
+                self._sniffer.stop()
+
+
 class RIDWorker(pytak.QueueWorker):
     """Queue Worker for RID."""
 
