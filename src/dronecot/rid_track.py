@@ -59,10 +59,19 @@ import time
 
 from typing import Any, Dict, Optional, Tuple
 
-__all__ = ["ODIDAggregator", "DEFAULT_TRACK_TTL", "DEFAULT_MAX_TRACKS"]
+__all__ = [
+    "ODIDAggregator",
+    "DEFAULT_TRACK_TTL",
+    "DEFAULT_MAX_TRACKS",
+    "DEFAULT_ID_GRACE",
+]
 
 DEFAULT_TRACK_TTL = 120.0
 DEFAULT_MAX_TRACKS = 512
+# How long to wait for a BasicID before rendering a position-only track under a
+# MAC-derived UID. Transmitters interleave BasicID with Location, so the serial
+# is normally well under a second away.
+DEFAULT_ID_GRACE = 5.0
 
 # Bookkeeping emitted by odid.message_pack_to_dict that describes the *frame*
 # rather than the aircraft. Always taken from the newest message rather than
@@ -100,6 +109,11 @@ def track_key(rid: dict) -> Optional[Tuple[str, str]]:
     return None
 
 
+def _has_id(rid: dict) -> bool:
+    """True once the transmitter's own serial/ID is known."""
+    return not _is_empty(rid.get("BasicID", rid.get("BasicID_0")))
+
+
 def has_position(rid: dict) -> bool:
     """True if the record can render as either a UAS or an operator CoT."""
     uas = rid.get("Latitude") is not None and rid.get("Longitude") is not None
@@ -117,14 +131,27 @@ class ODIDAggregator:
         self,
         ttl: float = DEFAULT_TRACK_TTL,
         max_tracks: int = DEFAULT_MAX_TRACKS,
+        id_grace: float = DEFAULT_ID_GRACE,
     ) -> None:
         self.ttl = float(ttl)
         self.max_tracks = int(max_tracks)
-        # key -> (last_seen_monotonic, merged_record)
-        self._tracks: Dict[Tuple[str, str], Tuple[float, dict]] = {}
+        self.id_grace = float(id_grace)
+        # key -> (first_seen, last_seen, merged_record)  [monotonic clock]
+        self._tracks: Dict[Tuple[str, str], Tuple[float, float, dict]] = {}
 
     def __len__(self) -> int:
         return len(self._tracks)
+
+    def __bool__(self) -> bool:
+        """An aggregator is always truthy, even with no tracks yet.
+
+        Without this, ``__len__`` makes a freshly-constructed aggregator falsy,
+        so the natural ``if aggregator:`` silently skips aggregation until the
+        first track happens to be created -- which is exactly never, because
+        tracks are only created *by* aggregating. Truthiness means "there is an
+        aggregator", not "it is holding something".
+        """
+        return True
 
     def update(self, rid: dict) -> Optional[dict]:
         """Merge ``rid`` into its transmitter's track.
@@ -146,15 +173,29 @@ class ODIDAggregator:
         self.prune(now)
 
         previous = self._tracks.get(key)
-        merged = dict(previous[1]) if previous else {}
+        first_seen = previous[0] if previous else now
+        merged = dict(previous[2]) if previous else {}
         self._merge_into(merged, rid)
 
-        self._tracks[key] = (now, merged)
+        self._tracks[key] = (first_seen, now, merged)
         self._enforce_cap()
+
+        if not has_position(merged):
+            return None
+
+        # Hold a position-only track briefly while waiting for the serial. A
+        # transmitter interleaves BasicID with Location, so the serial is
+        # usually a fraction of a second away -- rendering first would emit CoT
+        # under a MAC-derived UID and then switch to the real serial, leaving
+        # TWO markers in TAK for one aircraft. After the grace period, render
+        # anyway: an unidentified drone still needs to be on the map.
+        if self.id_grace > 0 and not _has_id(merged):
+            if now - first_seen < self.id_grace:
+                return None
 
         # Return a copy: the caller renders CoT from it and must not mutate the
         # track we keep for the next advertisement.
-        return dict(merged) if has_position(merged) else None
+        return dict(merged)
 
     def _merge_into(self, merged: dict, rid: dict) -> None:
         """Overlay ``rid`` onto ``merged``, newest non-empty value winning."""
@@ -183,7 +224,7 @@ class ODIDAggregator:
     def prune(self, now: Optional[float] = None) -> int:
         """Drop tracks unheard from for longer than ``ttl``. Returns count dropped."""
         now = time.monotonic() if now is None else now
-        stale = [k for k, (seen, _) in self._tracks.items() if now - seen > self.ttl]
+        stale = [k for k, (_, seen, _rec) in self._tracks.items() if now - seen > self.ttl]
         for key in stale:
             del self._tracks[key]
         return len(stale)
@@ -192,6 +233,6 @@ class ODIDAggregator:
         """Evict the least recently heard tracks down to ``max_tracks``."""
         if self.max_tracks <= 0 or len(self._tracks) <= self.max_tracks:
             return
-        ordered = sorted(self._tracks.items(), key=lambda kv: kv[1][0])
+        ordered = sorted(self._tracks.items(), key=lambda kv: kv[1][1])
         for key, _ in ordered[: len(self._tracks) - self.max_tracks]:
             del self._tracks[key]

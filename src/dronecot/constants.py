@@ -64,6 +64,9 @@ DEFAULT_SENSOR_HAE: float = 0.0
 # disable aggregation and restore per-message rendering.
 DEFAULT_RID_TRACK_TTL: float = 120.0  # seconds of silence before a track expires
 DEFAULT_RID_TRACK_MAX: int = 512  # hard cap on simultaneously tracked transmitters
+# Grace period to wait for a BasicID before rendering a position-only track
+# under a MAC-derived UID; avoids emitting two TAK markers for one aircraft.
+DEFAULT_RID_TRACK_ID_GRACE: float = 5.0
 
 # Pre-decoded Remote ID JSON over UDP constants
 DEFAULT_UDP_RID_PORT: int = 9999

@@ -159,6 +159,57 @@ class TestODIDAggregator(unittest.TestCase):
         self.assertEqual(agg.prune(), 1)
         self.assertEqual(len(agg), 0)
 
+    def test_id_grace_holds_position_only_track(self):
+        """Avoid two TAK markers for one aircraft.
+
+        Rendering a Location before its BasicID arrives emits CoT under a
+        MAC-derived UID, then switches to the real serial moments later.
+        Measured against a live DroneBeacon DB120: without the grace period a
+        single aircraft produced BOTH 'RID.MAC-DF7211D26B95.uas' and
+        'RID.1787F04BM24010011195.uas'.
+        """
+        agg = rid_track.ODIDAggregator(id_grace=30.0)
+        mac = "DF:72:11:D2:6B:95"
+
+        # Position first, serial not yet heard -> held back.
+        self.assertIsNone(agg.update(_rid(_location_message(37.7, -122.4), mac)))
+
+        # Serial arrives -> now it renders, under the real serial.
+        merged = agg.update(_rid(_basic_id_message("SERIAL123"), mac))
+        self.assertIsNotNone(merged)
+        self.assertEqual(merged["BasicID"], "SERIAL123")
+        self.assertEqual(
+            functions._rid_identity(merged)[0], "SERIAL123"
+        )
+
+    def test_id_grace_expires_so_unknown_drones_still_appear(self):
+        """An unidentified drone must still reach the map."""
+        agg = rid_track.ODIDAggregator(id_grace=0.001)
+        mac = "AA:BB:CC:DD:EE:FF"
+        agg.update(_rid(_location_message(37.7, -122.4), mac))
+
+        import time as _time
+
+        _time.sleep(0.01)
+        merged = agg.update(_rid(_location_message(37.71, -122.41), mac))
+        self.assertIsNotNone(merged, "grace expired; track must render anyway")
+        self.assertEqual(
+            functions._rid_identity(merged)[0], "MAC-AABBCCDDEEFF"
+        )
+
+    def test_id_grace_disabled_renders_immediately(self):
+        agg = rid_track.ODIDAggregator(id_grace=0)
+        merged = agg.update(_rid(_location_message(1.0, 2.0), "AA:BB:CC:DD:EE:FF"))
+        self.assertIsNotNone(merged)
+
+    def test_empty_aggregator_is_truthy(self):
+        """__len__ would otherwise make a fresh aggregator falsy, so the natural
+        `if aggregator:` would silently skip aggregation forever."""
+        agg = rid_track.ODIDAggregator()
+        self.assertEqual(len(agg), 0)
+        self.assertTrue(agg)
+        self.assertTrue(bool(agg))
+
     def test_max_tracks_is_bounded(self):
         agg = rid_track.ODIDAggregator(max_tracks=4)
         for i in range(40):

@@ -599,6 +599,11 @@ class RIDWorker(pytak.QueueWorker):
                 max_tracks=int(
                     config.get("RID_TRACK_MAX", dronecot.DEFAULT_RID_TRACK_MAX)
                 ),
+                id_grace=float(
+                    config.get(
+                        "RID_TRACK_ID_GRACE", dronecot.DEFAULT_RID_TRACK_ID_GRACE
+                    )
+                ),
             )
             if ttl > 0
             else None

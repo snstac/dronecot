@@ -162,6 +162,7 @@ MQTT) already carry everything in one frame and are unaffected.
 |-----|---------|-------------|
 | `RID_TRACK_TTL` | `120` | Seconds of silence before a transmitter's track expires. Set `0` to disable aggregation and render every message independently. |
 | `RID_TRACK_MAX` | `512` | Hard cap on simultaneously tracked transmitters; least-recently-heard are evicted first. |
+| `RID_TRACK_ID_GRACE` | `5` | Seconds to wait for a serial before rendering a position-only track under a MAC-derived UID. Prevents one aircraft appearing as two TAK markers. `0` renders immediately. |
 
 ---
 

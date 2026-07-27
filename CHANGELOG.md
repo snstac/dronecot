@@ -28,8 +28,20 @@ badly in the field.
   bound memory. Wired into `RIDWorker.handle_data()`, the single choke point all
   workers feed, so Wi-Fi, BLE, serial, MQTT and UDP all benefit. Full `0xF`
   message packs are unaffected — they already carry everything in one frame.
-  Tunable via `RID_TRACK_TTL` (default 120 s; set 0 to disable) and
-  `RID_TRACK_MAX` (default 512).
+  Tunable via `RID_TRACK_TTL` (default 120 s; set 0 to disable),
+  `RID_TRACK_MAX` (default 512) and `RID_TRACK_ID_GRACE` (default 5 s).
+  `RID_TRACK_ID_GRACE` briefly holds a position-only track while waiting for
+  its serial, so one aircraft does not appear as two TAK markers (first under a
+  MAC-derived UID, then under the real serial); after the grace period an
+  unidentified drone renders anyway.
+
+  **Measured against a live BlueMark DroneBeacon DB120** over 234 real BLE
+  advertisements: without aggregation only 57 (24%) rendered as CoT and the
+  real serial NEVER appeared — every event used the MAC fallback UID. With
+  aggregation 230 (98%) rendered, all under the correct serial
+  `RID.1787F04BM24010011195.uas`. The transmitter sent BasicID, Location and
+  System as separate advertisements and no `0xF` message packs at all,
+  confirming the single-message rotation this release exists to handle.
 - **Fix: operator CoT UID ignored the MAC.** `rid_op_to_cot_xml()` read
   `data["MAC address"]`, but wireless captures put it in `data["data"]`, so the
   Drone-Hone-style `op-<mac>` UID never actually used a MAC.
