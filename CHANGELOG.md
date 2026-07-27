@@ -1,3 +1,66 @@
+## DroneCOT 2.3.0
+
+Correctness release for single-message Remote ID. A BLE legacy transmitter fits
+only ONE 25-byte ODID message per advertisement and rotates through message
+types, so the serial, the UAS position and the operator location arrive in
+*different* frames. DroneCOT rendered each frame independently, which broke
+badly in the field.
+
+- **Fix: CoT XML could contain NUL bytes and fail to parse.** ODID pads its
+  fixed-width ASCII fields (20-byte serial, 23-byte text) with NUL, and
+  `clean_SN()` / `clean_string()` stripped only whitespace. Any UAS whose serial
+  was shorter than the field emitted a CoT UID such as
+  `RID.SHORTSN\0\0\0....uas` — 82 NUL bytes in the document, which is illegal in
+  XML 1.0 and will not reparse. Both cleaners now strip NUL and all C0 control
+  characters. Affected every source (Wi-Fi, BLE, serial, MQTT); went unnoticed
+  because every committed fixture uses a full-width 20-character serial.
+- **Fix: every drone collapsed onto one track.** A Location message carries a
+  position but no serial, so it rendered with the constant UID
+  `RID.Unknown-BasicID_0.uas` — all aircraft in range shared one track. The UID
+  now falls back to the advertiser MAC (`MAC-<addr>`) so distinct transmitters
+  stay distinct.
+- **Fix: BasicID and System messages were silently dropped**, having no position
+  of their own.
+- **New `rid_track.ODIDAggregator`**: merges successive single ODID messages per
+  transmitter (keyed on the advertiser MAC, which ASTM F3411 requires to be
+  stable for a flight session) so a CoT carries the serial from one
+  advertisement and the position from another. TTL-expired and hard-capped to
+  bound memory. Wired into `RIDWorker.handle_data()`, the single choke point all
+  workers feed, so Wi-Fi, BLE, serial, MQTT and UDP all benefit. Full `0xF`
+  message packs are unaffected — they already carry everything in one frame.
+  Tunable via `RID_TRACK_TTL` (default 120 s; set 0 to disable),
+  `RID_TRACK_MAX` (default 512) and `RID_TRACK_ID_GRACE` (default 5 s).
+  `RID_TRACK_ID_GRACE` briefly holds a position-only track while waiting for
+  its serial, so one aircraft does not appear as two TAK markers (first under a
+  MAC-derived UID, then under the real serial); after the grace period an
+  unidentified drone renders anyway.
+
+  **Measured against a live BlueMark DroneBeacon DB120** over 234 real BLE
+  advertisements: without aggregation only 57 (24%) rendered as CoT and the
+  real serial NEVER appeared — every event used the MAC fallback UID. With
+  aggregation 230 (98%) rendered, all under the correct serial
+  `RID.1787F04BM24010011195.uas`. The transmitter sent BasicID, Location and
+  System as separate advertisements and no `0xF` message packs at all,
+  confirming the single-message rotation this release exists to handle.
+- **Fix: operator CoT UID ignored the MAC.** `rid_op_to_cot_xml()` read
+  `data["MAC address"]`, but wireless captures put it in `data["data"]`, so the
+  Drone-Hone-style `op-<mac>` UID never actually used a MAC.
+- Replace deprecated `datetime.utcfromtimestamp()` (Python 3.12+ warning).
+- Tests: 16 new, including a real ASTM F3411 advertisement captured off the air
+  from a BlueMark DroneBeacon DB120 — the existing fixtures are all message
+  packs or CUAS blobs and never exercised the single-message path.
+
+## DroneCOT 2.2.5
+
+- Enrich RID CoT `<__cuas>` detail and remarks with `sensor_model`,
+  `sensor_method` and `band`. New `SENSOR_MODEL` / `SENSOR_TYPE` config.
+
+## DroneCOT 2.2.4
+
+- `wifi_parse`: fix `extract_odid_from_scapy_packet()`, which decoded zero
+  beacons because `bytes(elt.oui)` on an int produced a 16 MB zero buffer. Now
+  delegates to `extract_odid_from_dot11(bytes(dot11))`.
+
 ## DroneCOT 2.2.3
 
 - SerialWorker: handle MAVLink **ADSB_VEHICLE** messages (in addition to

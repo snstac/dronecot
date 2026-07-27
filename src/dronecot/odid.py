@@ -341,22 +341,22 @@ def print_operatorID(payload):
 	print("Type: %s" % decode_operatorID_type(operatorID_type))
 	print("Text: %s" % clean_string(bytes(operatorID).decode('ascii')))
 
-#removes characters like \t \n \r space from string
+# ODID packs fixed-width ASCII fields (20-byte serials, 23-byte text) and pads
+# the remainder with NUL. Those NULs are padding, never content, and they are
+# ILLEGAL in XML 1.0 -- a serial shorter than the field left NUL bytes in the
+# CoT UID, producing a document that will not even reparse. Strip NUL and every
+# other C0 control character alongside the whitespace.
+def _strip_control(string):
+    return "".join(ch for ch in string if ch >= " " and ch != "\x7f")
+
+
+#removes NUL padding, control characters, and spaces from a serial number
 def clean_SN(string):
-    string = string.replace(" ", "")
-    string = string.replace("\t", "")
-    string = string.replace("\n", "")
-    string = string.replace("\r", "")
+    return _strip_control(string).replace(" ", "")
 
-    return string
-
-#removes characters like \t \n \r from string
+#removes NUL padding and control characters from a free-text string
 def clean_string(string):
-    string = string.replace("\t", "")
-    string = string.replace("\n", "")
-    string = string.replace("\r", "")
-
-    return string
+    return _strip_control(string).strip()
 
 def decode_basicID_ID_type(IDType):
     string = ""
@@ -512,7 +512,11 @@ def decode_system_ua_class(ua_class):
 def decode_system_timestamp(timestamp):
     string = ""
     timestamp = int(timestamp[0]) + 1546300800 # add 01/01/2019
-    string = datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S') + " UTC"
+    # utcfromtimestamp() is deprecated in 3.12+; build a timezone-aware UTC
+    # datetime instead and format it identically.
+    string = datetime.datetime.fromtimestamp(
+        timestamp, datetime.timezone.utc
+    ).strftime('%Y-%m-%d %H:%M:%S') + " UTC"
 
     return string
 

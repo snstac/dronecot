@@ -141,6 +141,31 @@ See [Feeds](feeds.md) for expected MQTT message formats.
 
 ---
 
+## Remote ID track aggregation
+
+A BLE legacy transmitter fits only **one** 25-byte ODID message per
+advertisement, so it rotates through message types: the serial (BasicID), the
+aircraft position (Location) and the operator location (System) each arrive in a
+*different* frame. DroneCOT merges them per transmitter — keyed on the
+advertiser MAC, which ASTM F3411 requires to stay constant for a flight session
+— so the CoT it emits carries the serial from one advertisement and the position
+from another.
+
+Without this, position-less messages are dropped and position-only messages all
+render with the same placeholder UID, collapsing every aircraft in range onto a
+single track.
+
+Sources that send a full `0xF` message pack (most Wi-Fi beacons, DroneScout,
+MQTT) already carry everything in one frame and are unaffected.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `RID_TRACK_TTL` | `120` | Seconds of silence before a transmitter's track expires. Set `0` to disable aggregation and render every message independently. |
+| `RID_TRACK_MAX` | `512` | Hard cap on simultaneously tracked transmitters; least-recently-heard are evicted first. |
+| `RID_TRACK_ID_GRACE` | `5` | Seconds to wait for a serial before rendering a position-only track under a MAC-derived UID. Prevents one aircraft appearing as two TAK markers. `0` renders immediately. |
+
+---
+
 ## Optional
 
 | Key | Default | Description |
