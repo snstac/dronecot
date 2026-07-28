@@ -208,7 +208,16 @@ def _rid_identity(data: dict) -> Tuple[str, Optional[str]]:
     uasid = data.get("BasicID") or data.get("BasicID_0")
     uasid = str(uasid).strip() if uasid else ""
     if not uasid:
-        uasid = f"MAC-{mac.replace(':', '').upper()}" if mac else "Unknown-BasicID_0"
+        if mac:
+            uasid = f"MAC-{mac.replace(':', '').upper()}"
+        else:
+            # Neither serial nor MAC: serial/MAVLink receivers report no MAC at
+            # all. Fall back to the feed that delivered it so two receivers do
+            # not collide, rather than the shared Unknown-BasicID_0 placeholder
+            # that put every such aircraft on one track.
+            feed = src_data.get("sensor_id") or src_data.get("sensor ID")
+            feed = str(feed).strip() if feed else ""
+            uasid = f"FEED-{feed}" if feed else "Unknown-BasicID_0"
 
     return uasid, mac
 
