@@ -73,8 +73,11 @@ class FunctionsTestCase(unittest.TestCase):
         self.assertIsNotNone(point)
         self.assertEqual(point.get("lat"), "37.7599")
         self.assertEqual(point.get("lon"), "-122.4977")
-        self.assertEqual(point.get("ce"), "12")
-        self.assertEqual(point.get("le"), "5")
+        # ODID accuracy codes, decoded to METRES for CoT: HorizAccuracy 12 is
+        # ODID_HOR_ACC_1_METER and VertAccuracy 5 is ODID_VER_ACC_3_METER. These
+        # previously asserted the raw codes "12"/"5", which claimed 12 m / 5 m.
+        self.assertEqual(point.get("ce"), "1.0")
+        self.assertEqual(point.get("le"), "3.0")
         self.assertEqual(point.get("hae"), "28.0")
 
         detail = cot_xml.find("detail")
@@ -113,8 +116,11 @@ class FunctionsTestCase(unittest.TestCase):
         self.assertIsNotNone(point)
         self.assertEqual(point.get("lat"), "37.7599")
         self.assertEqual(point.get("lon"), "-122.4977")
-        self.assertEqual(point.get("ce"), "12")
-        self.assertEqual(point.get("le"), "5")
+        # ODID accuracy codes, decoded to METRES for CoT: HorizAccuracy 12 is
+        # ODID_HOR_ACC_1_METER and VertAccuracy 5 is ODID_VER_ACC_3_METER. These
+        # previously asserted the raw codes "12"/"5", which claimed 12 m / 5 m.
+        self.assertEqual(point.get("ce"), "1.0")
+        self.assertEqual(point.get("le"), "3.0")
         self.assertEqual(point.get("hae"), "28.0")
 
         detail = cot_xml.find("detail")
@@ -153,8 +159,11 @@ class FunctionsTestCase(unittest.TestCase):
         self.assertIsNotNone(point)
         self.assertEqual(point.get("lat"), "37.7599")
         self.assertEqual(point.get("lon"), "-122.4977")
-        self.assertEqual(point.get("ce"), "12")
-        self.assertEqual(point.get("le"), "5")
+        # ODID accuracy codes, decoded to METRES for CoT: HorizAccuracy 12 is
+        # ODID_HOR_ACC_1_METER and VertAccuracy 5 is ODID_VER_ACC_3_METER. These
+        # previously asserted the raw codes "12"/"5", which claimed 12 m / 5 m.
+        self.assertEqual(point.get("ce"), "1.0")
+        self.assertEqual(point.get("le"), "3.0")
         self.assertEqual(point.get("hae"), "28.0")
 
         detail = cot_xml.find("detail")
@@ -193,8 +202,11 @@ class FunctionsTestCase(unittest.TestCase):
         self.assertIsNotNone(point)
         self.assertEqual(point.get("lat"), "37.7599")
         self.assertEqual(point.get("lon"), "-122.4977")
-        self.assertEqual(point.get("ce"), "12")
-        self.assertEqual(point.get("le"), "5")
+        # ODID accuracy codes, decoded to METRES for CoT: HorizAccuracy 12 is
+        # ODID_HOR_ACC_1_METER and VertAccuracy 5 is ODID_VER_ACC_3_METER. These
+        # previously asserted the raw codes "12"/"5", which claimed 12 m / 5 m.
+        self.assertEqual(point.get("ce"), "1.0")
+        self.assertEqual(point.get("le"), "3.0")
         self.assertEqual(point.get("hae"), "28.0")
 
         detail = cot_xml.find("detail")

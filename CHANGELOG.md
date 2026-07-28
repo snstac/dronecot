@@ -1,3 +1,26 @@
+## DroneCOT 2.3.1
+
+- **Fix: CoT `ce`/`le` reported ODID accuracy ENUM CODES as if they were metres.**
+  ASTM F3411 accuracy fields are enum codes; CoT `<point ce= le=>` are metres.
+  Emitting the raw code claimed precision the aircraft never reported, and the
+  worst case inverted the meaning entirely: code `0` means *"unknown / >= 18.52
+  km"* but rendered as `ce="0"` — a perfect fix. Observed live on a DroneBeacon
+  DB120: `HorizAccuracy=9` (ODID *< 30 m*) was drawn on the map at **9 m**, and
+  `BaroAccuracy=0` (unknown) as **zero error**. Codes now decode to metres via
+  tables mirroring `decodeHorizontalAccuracy()`/`decodeVerticalAccuracy()` in
+  opendroneid-core-c; unknown and reserved codes emit the CoT unknown sentinel
+  rather than a fabricated number. Four existing tests asserted the old raw
+  codes and have been corrected.
+- **Fix: absent altitude rendered as sea level.** `<height value>` defaulted to
+  `0`; an unknown altitude now uses the CoT unknown sentinel like `hae`/`ce`/`le`.
+- **Fix: MAC-less feeds shared one placeholder UID.** Serial/MAVLink receivers
+  (DroneScout Bridge, SiK) report no MAC, so a Location- or System-only message
+  had neither MAC nor serial and rendered as `Unknown-BasicID_0`, colliding
+  across every such source. The UID now falls back to `FEED-<sensor_id>`.
+  Measured on a live DroneScout Bridge: 57 correctly identified events alongside
+  3 placeholders. Aggregation is deliberately NOT keyed on the feed — one
+  receiver reports many aircraft, so that would merge distinct drones.
+
 ## DroneCOT 2.3.0
 
 Correctness release for single-message Remote ID. A BLE legacy transmitter fits

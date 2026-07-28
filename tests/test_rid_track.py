@@ -350,3 +350,52 @@ class TestRidIdentity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAccuracyEnums(unittest.TestCase):
+    """ODID accuracy fields are enum CODES; CoT ce/le are METRES.
+
+    Emitting the raw code claims precision the aircraft never reported. Worst
+    case inverts the meaning: code 0 means "unknown / >= 18.52 km" but rendered
+    as ce="0" -- a perfect fix. Observed live on a DroneBeacon: HorizAccuracy=9
+    (<30 m) drawn at 9 m, BaroAccuracy=0 (unknown) as zero error.
+    """
+
+    def test_horizontal_codes_map_to_metres(self):
+        # Mirrors decodeHorizontalAccuracy() in opendroneid-core-c.
+        for code, metres in ((9, "30.0"), (10, "10.0"), (11, "3.0"), (12, "1.0"),
+                             (1, "18520.0"), (6, "555.6")):
+            self.assertEqual(functions._odid_horiz_ce({"HorizAccuracy": code}), metres)
+
+    def test_vertical_codes_map_to_metres(self):
+        for code, metres in ((1, "150.0"), (2, "45.0"), (4, "10.0"), (6, "1.0")):
+            self.assertEqual(functions._odid_vert_le({"VertAccuracy": code}), metres)
+
+    def test_unknown_code_zero_is_not_perfect_precision(self):
+        """The dangerous inversion: 0 means UNKNOWN, never zero error."""
+        self.assertEqual(functions._odid_horiz_ce({"HorizAccuracy": 0}),
+                         functions.CE_LE_UNKNOWN)
+        self.assertEqual(functions._odid_vert_le({"VertAccuracy": 0}),
+                         functions.CE_LE_UNKNOWN)
+
+    def test_missing_or_reserved_codes_are_unknown(self):
+        for probe in ({}, {"HorizAccuracy": None}, {"HorizAccuracy": 15},
+                      {"HorizAccuracy": "junk"}):
+            self.assertEqual(functions._odid_horiz_ce(probe), functions.CE_LE_UNKNOWN)
+
+    def test_end_to_end_cot_uses_metres_not_the_code(self):
+        pack = (bytes([0xF0, ODID_MESSAGE_SIZE, 2])
+                + _basic_id_message("SERIAL1") + _location_message(37.7, -122.4))
+        rid = rid_normalize.bytes_to_rid_dict(pack, {"MAC address": "AA:BB:CC:DD:EE:FF"})
+        rid["HorizAccuracy"] = 9   # ODID: < 30 m
+        rid["VertAccuracy"] = 2    # ODID: < 45 m
+        point = functions.rid_uas_to_cot_xml(rid, {}).find("point")
+        self.assertEqual(point.get("ce"), "30.0")
+        self.assertEqual(point.get("le"), "45.0")
+
+    def test_absent_altitude_is_not_rendered_as_sea_level(self):
+        rid = _rid(_location_message(1.0, 2.0), "AA:BB:CC:DD:EE:FF")
+        rid.pop("AltitudeGeo", None)
+        event = functions.rid_uas_to_cot_xml(rid, {})
+        height = event.find(".//height")
+        self.assertEqual(height.get("value"), functions.CE_LE_UNKNOWN)
