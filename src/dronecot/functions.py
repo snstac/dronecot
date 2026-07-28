@@ -190,6 +190,60 @@ def _cot_event_with_detail(
     )
 
 
+# ASTM F3411 / Open Drone ID accuracy fields are ENUM CODES, not metres. CoT
+# <point ce=/le=> are metres. Emitting the raw code claims a precision the
+# aircraft never reported -- and the worst case inverts the meaning entirely:
+# code 0 means "unknown / >= 18.52 km" but rendered as ce="0", i.e. a PERFECT
+# fix. Observed live: a DroneBeacon reporting HorizAccuracy=9 (<30 m) was drawn
+# on the map at 9 m, and BaroAccuracy=0 (unknown) as zero error.
+#
+# Values mirror decodeHorizontalAccuracy()/decodeVerticalAccuracy() in
+# opendroneid-core-c. Each code is an upper bound ("less than X"), so using X is
+# the conservative reading.
+CE_LE_UNKNOWN = "9999999.0"
+
+ODID_HORIZ_ACCURACY_M = {
+    1: 18520.0,  # 10 NM
+    2: 7408.0,   # 4 NM
+    3: 3704.0,   # 2 NM
+    4: 1852.0,   # 1 NM
+    5: 926.0,    # 0.5 NM
+    6: 555.6,    # 0.3 NM
+    7: 185.2,    # 0.1 NM
+    8: 92.6,     # 0.05 NM
+    9: 30.0,
+    10: 10.0,
+    11: 3.0,
+    12: 1.0,
+}
+
+ODID_VERT_ACCURACY_M = {1: 150.0, 2: 45.0, 3: 25.0, 4: 10.0, 5: 3.0, 6: 1.0}
+
+
+def _odid_accuracy_m(value, table) -> str:
+    """Map an ODID accuracy enum code to metres for CoT ce/le.
+
+    Returns the CoT unknown sentinel for code 0 (explicitly "unknown"), for any
+    unlisted/reserved code, and for a missing value -- never a fabricated 0.
+    """
+    if value is None:
+        return CE_LE_UNKNOWN
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return CE_LE_UNKNOWN
+    metres = table.get(code)
+    return CE_LE_UNKNOWN if metres is None else str(metres)
+
+
+def _odid_horiz_ce(data: dict) -> str:
+    return _odid_accuracy_m(data.get("HorizAccuracy"), ODID_HORIZ_ACCURACY_M)
+
+
+def _odid_vert_le(data: dict) -> str:
+    return _odid_accuracy_m(data.get("VertAccuracy"), ODID_VERT_ACCURACY_M)
+
+
 def _rid_identity(data: dict) -> Tuple[str, Optional[str]]:
     """Resolve a stable UAS identifier and the advertiser MAC for CoT UIDs.
 
@@ -208,7 +262,16 @@ def _rid_identity(data: dict) -> Tuple[str, Optional[str]]:
     uasid = data.get("BasicID") or data.get("BasicID_0")
     uasid = str(uasid).strip() if uasid else ""
     if not uasid:
-        uasid = f"MAC-{mac.replace(':', '').upper()}" if mac else "Unknown-BasicID_0"
+        if mac:
+            uasid = f"MAC-{mac.replace(':', '').upper()}"
+        else:
+            # Neither serial nor MAC: serial/MAVLink receivers report no MAC at
+            # all. Fall back to the feed that delivered it so two receivers do
+            # not collide, rather than the shared Unknown-BasicID_0 placeholder
+            # that put every such aircraft on one track.
+            feed = src_data.get("sensor_id") or src_data.get("sensor ID")
+            feed = str(feed).strip() if feed else ""
+            uasid = f"FEED-{feed}" if feed else "Unknown-BasicID_0"
 
     return uasid, mac
 
@@ -298,8 +361,8 @@ def rid_op_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branches
         stale=cot_stale,
         lat=lat,
         lon=lon,
-        ce=str(data.get("HorizAccuracy", "9999999.0")),
-        le=str(data.get("VertAccuracy", "9999999.0")),
+        ce=_odid_horiz_ce(data),
+        le=_odid_vert_le(data),
         hae=str(data.get("OperatorAltitudeGeo", "9999999.0")),
         detail=detail,
         config=config,
@@ -365,7 +428,9 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
     track.set("course", str(data.get("Direction", 0)))
 
     height: ET.Element = ET.Element("height")
-    height.set("value", str(data.get("AltitudeGeo", 0)))
+    # Never default to 0: an absent altitude is unknown, not sea level. Matches
+    # the CoT unknown sentinel used for hae/ce/le above.
+    height.set("value", str(data.get("AltitudeGeo", CE_LE_UNKNOWN)))
 
     # link: ET.Element = ET.Element("link")
     # link.set("uid", op_uid)
@@ -490,8 +555,8 @@ def rid_uas_to_cot_xml(  # NOQA pylint: disable=too-many-locals,too-many-branche
         stale=cot_stale,
         lat=lat,
         lon=lon,
-        ce=str(data.get("HorizAccuracy", "9999999.0")),
-        le=str(data.get("VertAccuracy", "9999999.0")),
+        ce=_odid_horiz_ce(data),
+        le=_odid_vert_le(data),
         hae=str(data.get("AltitudeGeo", "9999999.0")),
         detail=detail,
         config=config,
@@ -572,8 +637,8 @@ def sensor_status_to_cot(  # NOQA pylint: disable=too-many-locals,too-many-branc
         stale=cot_stale,
         lat=lat,
         lon=lon,
-        ce=str(data.get("HorizAccuracy", "9999999.0")),
-        le=str(data.get("VertAccuracy", "9999999.0")),
+        ce=_odid_horiz_ce(data),
+        le=_odid_vert_le(data),
         hae=hae,
         detail=detail,
         config=config,

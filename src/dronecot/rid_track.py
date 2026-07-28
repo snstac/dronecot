@@ -94,8 +94,21 @@ def _is_empty(value: Any) -> bool:
 def track_key(rid: dict) -> Optional[Tuple[str, str]]:
     """Return a ``(kind, value)`` aggregation key for a normalized RID dict.
 
-    Returns ``None`` when the record identifies no transmitter at all, in which
-    case it cannot be safely merged with anything and should pass through.
+    Keyed on the advertiser MAC, falling back to the transmitter's own serial.
+
+    Deliberately NOT keyed on the feed/sensor when neither is present. It is
+    tempting -- a MAC-less serial receiver looks like a single stream -- but a
+    DroneScout-style receiver reports MANY aircraft over one port, so feeding
+    them all into one key would merge distinct drones into a single track: the
+    exact bug this module exists to fix, reintroduced by another route. It also
+    splits rather than merges, because a BasicID message would key on the serial
+    while a Location message from the same aircraft keyed on the feed.
+
+    So a record with neither MAC nor serial passes through unaggregated, and
+    only its rendered UID falls back to the feed (see functions._rid_identity)
+    so that unidentified contacts from different receivers stay distinct.
+
+    Returns ``None`` when the record identifies no transmitter at all.
     """
     meta = rid.get(_META_KEY) or {}
     mac = meta.get("MAC address")
