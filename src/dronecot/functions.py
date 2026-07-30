@@ -269,7 +269,15 @@ def _rid_identity(data: dict) -> Tuple[str, Optional[str]]:
             # all. Fall back to the feed that delivered it so two receivers do
             # not collide, rather than the shared Unknown-BasicID_0 placeholder
             # that put every such aircraft on one track.
-            feed = src_data.get("sensor_id") or src_data.get("sensor ID")
+            # Checked at BOTH levels, for the same reason the MAC is: MQTT and
+            # serial feeds put this at the top level. Looking only in the
+            # sub-dict meant this rung silently never fired for them.
+            feed = (
+                src_data.get("sensor_id")
+                or src_data.get("sensor ID")
+                or data.get("sensor_id")
+                or data.get("sensor ID")
+            )
             feed = str(feed).strip() if feed else ""
             uasid = f"FEED-{feed}" if feed else "Unknown-BasicID_0"
 
