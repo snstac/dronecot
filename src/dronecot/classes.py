@@ -82,13 +82,64 @@ class SerialWorker(pytak.QueueWorker):
 
         return serial_port, baud_rate
 
-    def _mavlink_pack_to_parse_payload_schema(self, messages, pack_size) -> dict:
+    @staticmethod
+    def _id_or_mac_to_mac(id_or_mac) -> Optional[str]:
+        """Render a MAVLink OpenDroneID ``id_or_mac`` field as an advertiser MAC.
+
+        ODID carries a 20-byte ``id_or_mac`` naming the TRANSMITTER, and it is the
+        only per-aircraft grouping key a MAVLink serial feed offers -- unlike a
+        BLE or Wi-Fi capture there is no radio MAC in the metadata.
+
+        Measured on a DroneScout DS110: populated on 58 of 58 packs, as
+        db:13:81:94:13:55 followed by 14 zero bytes.
+
+        Only a MAC-shaped value (6 significant bytes then padding) is returned.
+        The field may instead carry an opaque ID string, and calling that a MAC
+        would put a wrong-looking value in the CoT UID; such feeds keep the
+        previous behaviour until there is real hardware to test against.
+        """
+        if id_or_mac is None:
+            return None
+        raw = bytes(bytearray(id_or_mac))
+        if not any(raw) or len(raw) < 6 or any(raw[6:]):
+            return None
+        return ":".join("%02X" % b for b in raw[:6])
+
+    def _mavlink_meta(self, id_or_mac=None, payload_type: Optional[str] = None) -> dict:
+        """Sensor metadata for a MAVLink-sourced record.
+
+        The wireless path builds this via rid_normalize.bytes_to_rid_dict; the
+        MAVLink path used to skip it entirely and hand up a record with no
+        ``data`` sub-dict at all. Two consequences, both seen on a live box:
+
+          * no transmitter identity, so a pack carrying only System/OperatorID
+            and no BasicID had nothing to aggregate on and rendered as
+            op-Unknown-BasicID_0 -- every operator in range on ONE track;
+          * no sensor_id, so CoT was attributed to the default
+            dronecot_<hostname> rather than the configured SENSOR_ID, making it
+            impossible to tell which receiver saw a contact.
+        """
+        data = dronecot.rid_normalize.uas_meta_defaults(self.config)
+        if payload_type:
+            data["type"] = payload_type
+        mac = self._id_or_mac_to_mac(id_or_mac)
+        if mac:
+            data["MAC address"] = mac
+        return data
+
+    def _mavlink_pack_to_parse_payload_schema(
+        self, messages, pack_size, id_or_mac=None
+    ) -> dict:
         """Convert MAVLink OPEN_DRONE_ID_MESSAGE_PACK to parse_payload-like schema."""
         parsed = dronecot.odid.message_pack_to_dict(messages, pack_size)
-        return dronecot.rid_normalize.odid_parsed_to_rid_dict(parsed)
+        rid = dronecot.rid_normalize.odid_parsed_to_rid_dict(parsed)
+        rid["data"] = self._mavlink_meta(
+            id_or_mac, payload_type="MAVLink OPEN_DRONE_ID_MESSAGE_PACK"
+        )
+        return rid
 
     @staticmethod
-    def _adsb_vehicle_to_rid_dict(msg) -> dict:
+    def _adsb_vehicle_to_rid_dict(msg, meta: Optional[dict] = None) -> dict:
         """Convert a MAVLink ADSB_VEHICLE to a RIDWorker dict.
 
         The DroneScout Bridge (and similar Remote ID receivers) can emit detected
@@ -113,7 +164,7 @@ class SerialWorker(pytak.QueueWorker):
             "SpeedHorizontal": getattr(msg, "hor_velocity", 0) / 100.0,  # cm/s -> m/s
             "SpeedVertical": getattr(msg, "ver_velocity", 0) / 100.0,
             "Direction": getattr(msg, "heading", 0) / 100.0,  # cdeg -> deg
-            "data": {"type": "MAVLink ADSB_VEHICLE"},
+            "data": dict(meta) if meta else {"type": "MAVLink ADSB_VEHICLE"},
         }
 
     async def run(self, _=-1) -> None:
@@ -180,11 +231,19 @@ class SerialWorker(pytak.QueueWorker):
                 msg_type = msg.get_type()
                 if msg_type == "OPEN_DRONE_ID_MESSAGE_PACK":
                     parsed_payload = self._mavlink_pack_to_parse_payload_schema(
-                        msg.messages, msg.msg_pack_size
+                        msg.messages,
+                        msg.msg_pack_size,
+                        getattr(msg, "id_or_mac", None),
                     )
                     await self.put_queue(parsed_payload)
                 elif msg_type == "ADSB_VEHICLE":
-                    rid = self._adsb_vehicle_to_rid_dict(msg)
+                    rid = self._adsb_vehicle_to_rid_dict(
+                        msg,
+                        self._mavlink_meta(
+                            getattr(msg, "id_or_mac", None),
+                            payload_type="MAVLink ADSB_VEHICLE",
+                        ),
+                    )
                     if rid:
                         await self.put_queue(rid)
                 elif msg_type == "HEARTBEAT":
