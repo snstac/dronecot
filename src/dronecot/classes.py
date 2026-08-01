@@ -42,6 +42,46 @@ import pytak
 import dronecot
 
 
+class _NoStatus:
+    """Stand-in for pytak.StatusWriter on a pytak too old to have one.
+
+    AryaOS boxes are updated as packages, so dronecot can land on a host whose
+    pytak predates StatusWriter (added in 7.4.0) -- 7.3.13 is still in the field.
+    A hard reference would raise AttributeError at import and take the gateway
+    down over its telemetry helper, which is exactly backwards: moving CoT is
+    the job, reporting on it is not.
+
+    Degrading here is safe because it is VISIBLE. With nothing writing
+    /run/dronecot/status.json, the Cockpit plugin reports "No status from this
+    gateway ... may be running a pytak too old to report status" rather than
+    rendering an empty decode feed as though the sky were empty.
+    """
+
+    def count(self, *args, **kwargs) -> None:
+        return None
+
+    def record(self, *args, **kwargs) -> None:
+        return None
+
+    def set(self, *args, **kwargs) -> None:
+        return None
+
+    def write(self, *args, **kwargs) -> bool:
+        return False
+
+
+# Resolved at import so a missing StatusWriter is a startup-time decision
+# rather than an AttributeError on the first Remote ID advertisement.
+_StatusWriter = getattr(pytak, "StatusWriter", None)
+
+
+def make_status(app_name: str, version: str):
+    """Return a status writer, or a no-op if this pytak has none."""
+    if _StatusWriter is None:
+        return _NoStatus()
+    return _StatusWriter(app_name, version=version)
+
+
 class SerialWorker(pytak.QueueWorker):
     """Queue Worker for MAVLink serial Open Drone ID."""
 
@@ -729,6 +769,19 @@ class RIDWorker(pytak.QueueWorker):
             else None
         )
 
+        # Runtime status for Cockpit. Systemd gives us /run/dronecot via
+        # RuntimeDirectory=, so this lands where the plugin looks for it.
+        #
+        # RIDWorker owns the status file rather than the capture workers because
+        # every RF source (Wi-Fi, BLE, BlueZ, serial MAVLink, MQTT, UDP) funnels
+        # through here. Instrumenting the capture workers instead would give N
+        # writers racing on one path, and each would see only its own slice.
+        self.status = make_status("dronecot", dronecot.__version__)
+
+    def _tracked(self) -> int:
+        """Number of transmitters the aggregator is currently holding."""
+        return len(self.aggregator) if self.aggregator is not None else 0
+
     async def handle_data(self, data: dict) -> None:
         """Handle Data from receiver: Render to CoT, put on TX queue.
 
@@ -739,39 +792,118 @@ class RIDWorker(pytak.QueueWorker):
         """
         self._logger.debug("Handling data: %s", data)
 
+        if not data:
+            # A decoder upstream produced nothing. Deliberately NOT counted as
+            # received: inflating rx with non-messages would make a receiver
+            # that hears only noise look like one hearing drones.
+            return
+
+        self.status.count("rx")
+
         if "status" in data and "position" not in data.get("topic", ""):
             self._logger.info("Processing sensor status data")
             event = dronecot.cot_to_xml(data, self.config, "sensor_status_to_cot")
+            if event:
+                self.status.count("emitted")
+                self.status.count("sensor_status")
+            else:
+                self.status.count("no_cot")
+            self.status.write()
             if event:
                 await self.put_queue(event)
             return
 
         if self.aggregator is not None:
             merged = self.aggregator.update(data)
+            self.status.set(tracked=self._tracked())
             if merged is None:
                 # Absorbed into a track that has no renderable position yet; it
                 # will contribute to the CoT rendered by a later advertisement.
+                # This is the COMMON case on BLE legacy, where a transmitter
+                # rotates BasicID -> Location -> System across advertisements,
+                # so it is counted rather than logged per-message.
                 self._logger.debug("Merged RID message, awaiting position")
+                self.status.count("merged_awaiting_position")
+                self.status.write()
                 return
             data = merged
 
         self._logger.info("Processing RID data")
         cot_funcs = ["rid_uas_to_cot_xml", "rid_op_to_cot_xml"]
+        events = []
         for func in cot_funcs:
             event = dronecot.cot_to_xml(data, self.config, func)
             if event:
-                await self.put_queue(event)
+                events.append(event)
+
+        # Record EVERY message that survives aggregation, not only the ones that
+        # produce a marker. A drone heard without a position still proves the
+        # receiver is working, and a feed that showed only plotted aircraft
+        # would sit empty on a perfectly healthy box -- which reads as a fault.
+        # The `placed` flag distinguishes the two without hiding either.
+        meta = data.get("data") or {}
+        self.status.record(
+            uas=data.get("BasicID") or data.get("BasicID_0"),
+            operator=data.get("OperatorID"),
+            mac=meta.get("MAC address"),
+            rssi=meta.get("RSSI"),
+            # "WiFi beacon", "WiFi NaN", "BLE", "BLE legacy (BlueZ)",
+            # "MAVLink ADSB_VEHICLE", or the configured SENSOR_PAYLOAD_TYPE.
+            source=meta.get("type"),
+            placed=bool(events),
+        )
+
+        if events:
+            self.status.count("emitted", len(events))
+        else:
+            self.status.count("no_cot")
+        self.status.write()
+
+        for event in events:
+            await self.put_queue(event)
 
     async def run(self, _=-1) -> None:
         """Run the main process loop."""
         self._logger.info("Running RIDWorker")
 
-        while True:
-            data = await self.net_queue.get()
-            if not data:
-                continue
+        # Write immediately, before any traffic arrives. A quiet sky is normal
+        # and can last hours; without this the management UI would report "no
+        # status from this gateway" -- indistinguishable from a gateway that
+        # failed to start -- for that entire time.
+        self.status.set(
+            tracked=self._tracked(),
+            # Scheme only. FEED_URL can carry MQTT credentials and status.json
+            # is world-readable on tmpfs.
+            feed=urlparse(str(self.config.get("FEED_URL", ""))).scheme or None,
+        )
+        self.status.write(force=True)
 
-            await self.handle_data(data)
+        # Heartbeat runs as its own task because the loop below blocks on
+        # net_queue.get(). Folding it into that await (via wait_for) would make
+        # every idle timeout look like an exception path; a separate task keeps
+        # the receive path unchanged.
+        heartbeat = asyncio.ensure_future(self._heartbeat())
+        try:
+            while True:
+                data = await self.net_queue.get()
+                if not data:
+                    continue
+
+                await self.handle_data(data)
+        finally:
+            heartbeat.cancel()
+
+    async def _heartbeat(self, interval: float = 5.0) -> None:
+        """Keep the status file fresh while no drones are in range.
+
+        The UI decides liveness from whether this file keeps changing, so an
+        idle-but-healthy gateway MUST keep writing; otherwise an empty sky would
+        be reported as a wedged service.
+        """
+        while True:
+            await asyncio.sleep(interval)
+            self.status.set(tracked=self._tracked())
+            self.status.write(force=True)
 
 
 class RXMockWorker(pytak.RXWorker):

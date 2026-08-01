@@ -18,6 +18,17 @@
 
 """Drone Open Remote ID to TAK Gateway (with DJI Drone ID and UDP Remote ID support)."""
 
+from pathlib import Path
+
+# Read from the same VERSION file setup.cfg packages, so the version an operator
+# sees in the management UI cannot drift from the version of the installed .deb.
+__version__ = (
+    Path(__file__)
+    .resolve()
+    .parent.joinpath("VERSION")
+    .read_text(encoding="utf-8")
+    .strip()
+)
 
 from .constants import (  # NOQA
     DEFAULT_MQTT_TOPIC,
