@@ -1,3 +1,11 @@
+## DroneCOT 2.3.3
+
+- Fixed the AntSDR scanner-push listener retaining active client tasks while
+  DroneCOT shut down after a TAK transport failure. The listener now owns and
+  closes its server, client tasks and writers with bounded waits, allowing the
+  PyTAK exception to reach systemd and trigger a reconnecting restart.
+- Require PyTAK 7.4.1 for bounded first-exception worker shutdown.
+
 ## DroneCOT 2.3.1
 
 - **Fix: CoT `ce`/`le` reported ODID accuracy ENUM CODES as if they were metres.**
