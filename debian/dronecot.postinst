@@ -77,6 +77,9 @@ fi
 pip3 install --quiet --break-system-packages aiomqtt pymavlink takproto 2>/dev/null || \
   echo "Note: could not install aiomqtt/pymavlink/takproto via pip; install manually if needed."
 
+# Load the newly installed unit before preserving or establishing enablement.
+systemctl daemon-reload
+
 # A Debian postinst receives the previously configured version as $2 during an
 # upgrade.  Preserve the administrator's enablement choice in that case: AryaOS
 # may deliberately run dronecot-wifi/ble/dronescout instead of this base unit.

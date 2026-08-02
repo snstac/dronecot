@@ -1,3 +1,8 @@
+## DroneCOT 2.3.7
+
+- Reload systemd's unit metadata during Debian package configuration so an
+  upgraded service never restarts against stale unit contents.
+
 ## DroneCOT 2.3.6
 
 - Preserve the administrator's `dronecot.service` enablement choice during
