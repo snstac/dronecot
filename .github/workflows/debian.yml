@@ -21,6 +21,13 @@ jobs:
       - name: Create Debian Package
         run: make clean install_test_requirements package
 
+      - name: Verify runtime version file is packaged
+        run: |
+          set -o pipefail
+          find deb_dist -maxdepth 1 -type f -name 'dronecot_[0-9]*_all.deb' \
+            -exec dpkg-deb --contents {} \; \
+            | grep -E '/dronecot/VERSION$'
+
       - name: Upload Artifacts to GitHub
         uses: actions/upload-artifact@master
         with:

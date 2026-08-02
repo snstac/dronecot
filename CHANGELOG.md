@@ -1,3 +1,10 @@
+## DroneCOT 2.3.4
+
+- Include `dronecot/VERSION` in wheel and Debian installations. DroneCOT 2.3.3
+  omitted this runtime file and failed at import time after installation.
+- Verify wheel and Debian archives contain the runtime version file before
+  publishing a release.
+
 ## DroneCOT 2.3.3
 
 - Fixed the AntSDR scanner-push listener retaining active client tasks while
