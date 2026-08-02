@@ -937,24 +937,60 @@ class DJIWorker(pytak.QueueWorker):
     def __init__(self, tx_queue: asyncio.Queue, config, net_queue: asyncio.Queue) -> None:
         super().__init__(tx_queue, config)
         self.net_queue = net_queue
+        self.status = make_status("dronecot", dronecot.__version__)
 
     async def handle_data(self, data) -> None:
+        if not data:
+            return
+
+        self.status.count("rx")
         if isinstance(data, str):
             events = dronecot.dji_handle_text_line(data, self.config)
+            source = "dji-text"
         elif isinstance(data, bytes) and data.startswith(b"dji_O,"):
-            events = dronecot.dji_handle_text_line(data.decode("utf-8", errors="replace"), self.config)
+            events = dronecot.dji_handle_text_line(
+                data.decode("utf-8", errors="replace"), self.config
+            )
+            source = "dji-text"
         else:
             events = dronecot.dji_handle_frame(data, self.config)
+            source = "dji-binary"
+
+        if events:
+            self.status.count("emitted", len(events))
+        else:
+            self.status.count("no_cot")
+        # Do not copy aircraft identifiers or the raw RF payload into the
+        # world-readable status file. Operators need to know whether the
+        # AntSDR is producing usable data, not which aircraft it heard.
+        self.status.record(source=source, placed=bool(events), events=len(events))
+        self.status.write()
+
         for event in events:
             await self.put_queue(event)
 
     async def run(self, _=-1) -> None:
         self._logger.info("Running %s", self.__class__)
+        self.status.set(
+            feed=urlparse(str(self.config.get("FEED_URL", ""))).scheme or None,
+            decoder="dji",
+        )
+        self.status.write(force=True)
+        heartbeat = asyncio.ensure_future(self._heartbeat())
+        try:
+            while True:
+                received = await self.net_queue.get()
+                if not received:
+                    continue
+                await self.handle_data(received)
+        finally:
+            heartbeat.cancel()
+
+    async def _heartbeat(self, interval: float = 5.0) -> None:
+        """Keep DJI status fresh when the RF feed is connected but quiet."""
         while True:
-            received = await self.net_queue.get()
-            if not received:
-                continue
-            await self.handle_data(received)
+            await asyncio.sleep(interval)
+            self.status.write(force=True)
 
 
 class _DJIFeedWorker(pytak.QueueWorker):

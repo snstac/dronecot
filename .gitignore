@@ -19,8 +19,10 @@
 .vagrant/
 RELEASE-VERSION.txt
 build/
+deb_dist/
 cover/
 dist/
+*.tar.gz
 dump.rdb
 flake8.log
 local/

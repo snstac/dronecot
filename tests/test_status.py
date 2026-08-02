@@ -209,6 +209,70 @@ class TestStatusHeartbeat:
         assert doc["tracked"] == 0
 
 
+@needs_statuswriter
+class TestDJIStatusSurface:
+    """AntSDR/DJI feeds use DJIWorker rather than RIDWorker."""
+
+    def _worker(self, tmp_path):
+        worker = classes.DJIWorker.__new__(classes.DJIWorker)
+        worker.config = {"FEED_URL": "tcp://172.31.100.2:52002"}
+        worker.net_queue = asyncio.Queue()
+        worker._logger = logging.getLogger("test")
+        worker.status = pytak.StatusWriter(
+            "dronecot-test", path=str(tmp_path / "status.json")
+        )
+        worker.put_queue = _noop_put
+        return worker
+
+    def _doc(self, worker):
+        with open(worker.status.path) as handle:
+            return json.load(handle)
+
+    def test_text_frame_counts_received_and_emitted(self, tmp_path, monkeypatch):
+        worker = self._worker(tmp_path)
+        monkeypatch.setattr(
+            classes.dronecot,
+            "dji_handle_text_line",
+            lambda data, config: [b"<event/>", b"<event/>"],
+        )
+
+        asyncio.run(worker.handle_data("dji_O,test"))
+
+        doc = self._doc(worker)
+        assert doc["counters"] == {"rx": 1, "emitted": 2}
+        assert doc["recent"][-1] == {
+            "t": doc["recent"][-1]["t"],
+            "source": "dji-text",
+            "placed": True,
+            "events": 2,
+        }
+
+    def test_unrenderable_binary_frame_is_visible(self, tmp_path, monkeypatch):
+        worker = self._worker(tmp_path)
+        monkeypatch.setattr(
+            classes.dronecot, "dji_handle_frame", lambda data, config: []
+        )
+
+        asyncio.run(worker.handle_data(b"binary-frame"))
+
+        doc = self._doc(worker)
+        assert doc["counters"] == {"rx": 1, "no_cot": 1}
+        assert doc["recent"][-1]["source"] == "dji-binary"
+        assert doc["recent"][-1]["placed"] is False
+
+    def test_heartbeat_refreshes_a_quiet_dji_feed(self, tmp_path):
+        worker = self._worker(tmp_path)
+
+        async def _drive():
+            task = asyncio.ensure_future(worker._heartbeat(interval=0.01))
+            await asyncio.sleep(0.05)
+            task.cancel()
+
+        asyncio.run(_drive())
+
+        assert self._doc(worker)["counters"] == {}
+
+
 class TestStatusDegradesVisibly:
     """A pytak without StatusWriter must not take the gateway down.
 
