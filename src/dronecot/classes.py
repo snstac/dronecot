@@ -27,7 +27,7 @@ import ssl
 from pathlib import Path
 
 from socket import socket
-from typing import Optional, Union
+from typing import Optional, Set, Union
 from urllib.parse import urlparse
 
 import lzma
@@ -1025,8 +1025,41 @@ class DJIFileWorker(_DJIFeedWorker):
 class DJIListenerWorker(pytak.QueueWorker):
     """Accept incoming TCP connections from DJI RF scanners (server mode)."""
 
-    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    _CLOSE_TIMEOUT = 1.0
+
+    def __init__(self, queue: asyncio.Queue, config) -> None:
+        super().__init__(queue, config)
+        self._server: Optional[asyncio.AbstractServer] = None
+        self._client_tasks: Set[asyncio.Task] = set()
+        self._client_writers: Set[asyncio.StreamWriter] = set()
+        self._close_lock = asyncio.Lock()
+        self._closed = False
+
+    def _client_connected(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        """Start and retain ownership of a scanner client task."""
+        task = asyncio.ensure_future(self._handle_client(reader, writer))
+        self._client_tasks.add(task)
+        task.add_done_callback(self._client_tasks.discard)
+
+    async def _close_writer(self, writer: asyncio.StreamWriter) -> None:
+        """Close one scanner connection without allowing shutdown to hang."""
+        writer.close()
+        try:
+            await asyncio.wait_for(
+                writer.wait_closed(), timeout=self._CLOSE_TIMEOUT
+            )
+        except (asyncio.TimeoutError, ConnectionError, OSError):
+            transport = getattr(writer, "transport", None)
+            if transport is not None:
+                transport.abort()
+
+    async def _handle_client(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         peer = writer.get_extra_info("peername")
+        self._client_writers.add(writer)
         self._logger.info("DJI client connected from %s", peer)
         try:
             while True:
@@ -1046,19 +1079,75 @@ class DJIListenerWorker(pytak.QueueWorker):
                     break
                 self.queue.put_nowait(data)
                 await asyncio.sleep(0.001)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             self._logger.error("DJI client error %s: %s", peer, exc)
         finally:
-            writer.close()
-            await writer.wait_closed()
+            self._client_writers.discard(writer)
+            await self._close_writer(writer)
+
+    async def close(self) -> None:
+        """Stop accepting clients and release every owned scanner connection."""
+        async with self._close_lock:
+            if self._closed:
+                return
+            self._closed = True
+
+            if self._server is not None:
+                self._server.close()
+                try:
+                    await asyncio.wait_for(
+                        self._server.wait_closed(), timeout=self._CLOSE_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    self._logger.warning("Timed out closing DJI listener socket")
+                self._server = None
+
+            client_tasks = {
+                task
+                for task in self._client_tasks
+                if task is not asyncio.current_task()
+            }
+            for task in client_tasks:
+                task.cancel()
+
+            writers = list(self._client_writers)
+            if writers:
+                await asyncio.gather(
+                    *(self._close_writer(writer) for writer in writers),
+                    return_exceptions=True,
+                )
+
+            if client_tasks:
+                _, stalled = await asyncio.wait(
+                    client_tasks, timeout=self._CLOSE_TIMEOUT
+                )
+                for task in stalled:
+                    self._logger.warning(
+                        "DJI client task did not stop within %.1fs",
+                        self._CLOSE_TIMEOUT,
+                    )
+                    task.cancel()
 
     async def run(self, _=-1) -> None:
         bind = self.config.get("DJI_BIND_ADDRESS", dronecot.DEFAULT_DJI_BIND_ADDRESS)
         port = self.config.get("DJI_TCP_PORT", dronecot.DEFAULT_DJI_TCP_PORT)
         self._logger.info("Running %s on %s:%s", self.__class__, bind, port)
-        server = await asyncio.start_server(self._handle_client, bind, port)
-        async with server:
-            await server.serve_forever()
+        server = await asyncio.start_server(
+            self._client_connected, bind, port
+        )
+        async with self._close_lock:
+            if self._closed:
+                server.close()
+                await server.wait_closed()
+                raise asyncio.CancelledError
+            self._server = server
+        try:
+            async with self._server:
+                await self._server.serve_forever()
+        finally:
+            await self.close()
 
 
 # Backward-compatible aliases matching djicot names
