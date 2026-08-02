@@ -1,3 +1,17 @@
+## DroneCOT 2.3.6
+
+- Preserve the administrator's `dronecot.service` enablement choice during
+  Debian package upgrades. This prevents an upgrade from enabling the base DJI
+  service on systems that deliberately run a Wi-Fi, BLE, or serial Remote ID
+  instance instead.
+- Exclude Python bytecode and cache directories from source distributions so a
+  package can be rebuilt reliably after running the test suite.
+
+## DroneCOT 2.3.5
+
+- Report live DJI AntSDR receiver activity in DroneCOT's runtime status rather
+  than leaving the feed indistinguishable from an idle or disconnected source.
+
 ## DroneCOT 2.3.4
 
 - Include `dronecot/VERSION` in wheel and Debian installations. DroneCOT 2.3.3

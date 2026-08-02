@@ -1,4 +1,4 @@
 include README.md CHANGELOG.md LICENSE src/dronecot/VERSION
 graft src
 recursive-include src/dronecot/data *
-
+global-exclude *.py[cod] __pycache__
