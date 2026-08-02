@@ -31,6 +31,12 @@ jobs:
       run: |
         python3 -m build
 
+    - name: Verify runtime version file is packaged
+      run: |
+        set -o pipefail
+        python3 -m zipfile -l dist/dronecot-*.whl \
+          | grep -E 'dronecot/VERSION'
+
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@release/v1
       # with:
