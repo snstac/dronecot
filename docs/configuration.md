@@ -62,6 +62,20 @@ Override the serial device path.
 
 Override the serial baud rate.
 
+### `SERIAL_CRLF_NORMALIZE`
+
+**Default:** `0` (disabled)
+
+Set to `1` for a binary MAVLink receiver whose USB serial firmware expands
+every LF byte to CRLF. This console-style newline conversion corrupts any
+MAVLink frame containing an LF byte in its header, payload, or checksum.
+DroneCOT reverses the expansion before passing bytes to pymavlink, including
+when a CRLF pair is split across serial reads.
+
+Leave this disabled for standards-compliant binary serial feeds. It is intended
+as a compatibility workaround for affected receiver firmware, not as general
+MAVLink framing.
+
 ---
 
 ## Wi-Fi (monitor mode)
@@ -212,6 +226,7 @@ MQTT) already carry everything in one frame and are unaffected.
 |-----|---------|-------------|
 | `DEBUG` | `0` | Verbose logging (`1`, `true`, `yes`) |
 | `ENABLE_RX_MOCK` | `0` | Enable legacy RX mock worker (compatibility) |
+| `SERIAL_CRLF_NORMALIZE` | `0` | Reverse broken LF-to-CRLF expansion on a binary MAVLink serial feed |
 
 ---
 

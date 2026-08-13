@@ -75,6 +75,49 @@ class _NoStatus:
 _StatusWriter = getattr(pytak, "StatusWriter", None)
 
 
+class _CRLFNormalizer:
+    """Reverse an LF-to-CRLF transformation on a binary byte stream.
+
+    Some ESP32 USB serial firmware sends MAVLink through a console-oriented
+    VFS stream configured to turn every LF byte into CRLF.  That conversion
+    also touches LF bytes inside MAVLink headers, payloads and checksums, so
+    pymavlink rejects the affected frames.  Keep a trailing CR between reads
+    so a CRLF pair split across pyserial chunks is still reversed exactly.
+
+    This is deliberately opt-in.  Applying it to a compliant binary stream
+    would collapse a legitimate CRLF byte sequence and corrupt that frame.
+    """
+
+    def __init__(self):
+        self._pending_cr = False
+
+    def feed(self, data: bytes) -> bytes:
+        """Return *data* with transmit-side CRLF expansion reversed."""
+        if not data:
+            return b""
+
+        if self._pending_cr:
+            data = b"\r" + data
+            self._pending_cr = False
+
+        if data.endswith(b"\r"):
+            data = data[:-1]
+            self._pending_cr = True
+
+        return data.replace(b"\r\n", b"\n")
+
+
+class _CRLFNormalizingReceiver:
+    """Callable wrapper around a pymavlink connection's ``recv`` method."""
+
+    def __init__(self, receiver):
+        self._receiver = receiver
+        self._normalizer = _CRLFNormalizer()
+
+    def __call__(self, size=None) -> bytes:
+        return self._normalizer.feed(self._receiver(size))
+
+
 def make_status(app_name: str, version: str):
     """Return a status writer, or a no-op if this pytak has none."""
     if _StatusWriter is None:
@@ -121,6 +164,18 @@ class SerialWorker(pytak.QueueWorker):
             serial_port = dronecot.DEFAULT_SERIAL_PORT
 
         return serial_port, baud_rate
+
+    def _serial_crlf_normalization_enabled(self) -> bool:
+        """Return whether broken console-style CRLF expansion is expected."""
+        value = self.config.get("SERIAL_CRLF_NORMALIZE", "0")
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _configure_serial_connection(self, master) -> None:
+        """Install optional byte-stream compatibility filters on *master*."""
+        if not self._serial_crlf_normalization_enabled():
+            return
+        master.recv = _CRLFNormalizingReceiver(master.recv)
+        self._logger.info("Normalizing CRLF-expanded MAVLink serial input")
 
     @staticmethod
     def _id_or_mac_to_mac(id_or_mac) -> Optional[str]:
@@ -228,6 +283,7 @@ class SerialWorker(pytak.QueueWorker):
                 master = await asyncio.to_thread(
                     mavutil.mavlink_connection, interface, baudrate
                 )
+                self._configure_serial_connection(master)
                 await asyncio.to_thread(master.wait_heartbeat, timeout=20)
                 self._logger.info("MAVLink heartbeat received")
             except SerialException as exc:

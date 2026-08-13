@@ -1,3 +1,10 @@
+## DroneCOT 2.3.8
+
+- Add opt-in `SERIAL_CRLF_NORMALIZE` support for receivers that send binary
+  MAVLink through an ESP console stream configured to expand LF bytes to CRLF.
+  The streaming normalizer reverses expansion across serial read boundaries so
+  pymavlink can validate and decode frames that were previously discarded.
+
 ## DroneCOT 2.3.7
 
 - Reload systemd's unit metadata during Debian package configuration so an
