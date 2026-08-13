@@ -216,7 +216,10 @@ class TestDJIStatusSurface:
     def _worker(self, tmp_path):
         worker = classes.DJIWorker.__new__(classes.DJIWorker)
         worker.config = {"FEED_URL": "tcp://172.31.100.2:52002"}
-        worker.net_queue = asyncio.Queue()
+        # handle_data does not consume net_queue. Keeping this synthetic worker
+        # loop-free also works on Python 3.9 after an earlier asyncio.run()
+        # closes and clears the process-wide default loop.
+        worker.net_queue = None
         worker._logger = logging.getLogger("test")
         worker.status = pytak.StatusWriter(
             "dronecot-test", path=str(tmp_path / "status.json")
