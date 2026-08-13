@@ -330,3 +330,22 @@ class TestStatusDegradesVisibly:
         if classes._StatusWriter is None:
             pytest.skip("installed pytak has no StatusWriter")
         assert not isinstance(classes.make_status("x", "0"), classes._NoStatus)
+
+    def test_instance_status_uses_configured_app_and_path(self, monkeypatch, tmp_path):
+        captured = {}
+
+        def fake_writer(app_name, *, path=None, version=None):
+            captured.update(app_name=app_name, path=path, version=version)
+            return object()
+
+        monkeypatch.setattr(classes, "_StatusWriter", fake_writer)
+        path = str(tmp_path / "status.json")
+        classes.make_worker_status(
+            {"STATUS_APP": "dronecot-dronescout", "STATUS_PATH": path}
+        )
+
+        assert captured == {
+            "app_name": "dronecot-dronescout",
+            "path": path,
+            "version": classes.dronecot.__version__,
+        }

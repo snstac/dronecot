@@ -192,6 +192,8 @@ See [Feeds](feeds.md) for expected MQTT message formats.
 | `COT_STALE` | `3600` (PyTAK) | Stale time in seconds |
 | `COT_HOST_ID` | `pytak@{hostname}` (PyTAK) | Host ID in remarks |
 | `GPS_INFO_CMD` | `gpspipe --json -n 5` | Command for sensor GPS when not in feed |
+| `STATUS_APP` | `dronecot` | Runtime status namespace under `/run`; set a unique value for each service instance |
+| `STATUS_PATH` | unset | Optional absolute runtime status file path, overriding `STATUS_APP` |
 
 ---
 

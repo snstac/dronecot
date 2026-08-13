@@ -118,11 +118,18 @@ class _CRLFNormalizingReceiver:
         return self._normalizer.feed(self._receiver(size))
 
 
-def make_status(app_name: str, version: str):
+def make_status(app_name: str, version: str, path: Optional[str] = None):
     """Return a status writer, or a no-op if this pytak has none."""
     if _StatusWriter is None:
         return _NoStatus()
-    return _StatusWriter(app_name, version=version)
+    return _StatusWriter(app_name, path=path, version=version)
+
+
+def make_worker_status(config):
+    """Build the status writer for one independently managed instance."""
+    app_name = str(config.get("STATUS_APP", "dronecot") or "dronecot")
+    path = str(config.get("STATUS_PATH", "") or "") or None
+    return make_status(app_name, dronecot.__version__, path=path)
 
 
 class SerialWorker(pytak.QueueWorker):
@@ -832,7 +839,7 @@ class RIDWorker(pytak.QueueWorker):
         # every RF source (Wi-Fi, BLE, BlueZ, serial MAVLink, MQTT, UDP) funnels
         # through here. Instrumenting the capture workers instead would give N
         # writers racing on one path, and each would see only its own slice.
-        self.status = make_status("dronecot", dronecot.__version__)
+        self.status = make_worker_status(config)
 
     def _tracked(self) -> int:
         """Number of transmitters the aggregator is currently holding."""
@@ -990,10 +997,12 @@ class RXMockWorker(pytak.RXWorker):
 class DJIWorker(pytak.QueueWorker):
     """Process DJI Drone ID data from a net queue and emit CoT events."""
 
-    def __init__(self, tx_queue: asyncio.Queue, config, net_queue: asyncio.Queue) -> None:
+    def __init__(
+        self, tx_queue: asyncio.Queue, config, net_queue: asyncio.Queue
+    ) -> None:
         super().__init__(tx_queue, config)
         self.net_queue = net_queue
-        self.status = make_status("dronecot", dronecot.__version__)
+        self.status = make_worker_status(config)
 
     async def handle_data(self, data) -> None:
         if not data:
