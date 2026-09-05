@@ -16,6 +16,7 @@
 
 """DroneCOT Function Tests."""
 
+import asyncio
 import json
 import os
 import unittest
@@ -59,12 +60,18 @@ class FunctionsTestCase(unittest.TestCase):
         """Disabling the receiver beacon keeps drone processing enabled."""
         clitool = SimpleNamespace(tx_queue=object())
         config = {"FEED_URL": "serial:///dev/ttyACM0", "SENSOR_BEACON": "0"}
-        with patch.object(dronecot, "SerialWorker", return_value="serial"):
-            with patch.object(dronecot, "RIDWorker", return_value="tracks"):
-                with patch.object(
-                    dronecot, "SensorWorker", return_value="receiver"
-                ) as sensor_worker:
-                    tasks = dronecot.functions.create_tasks(config, clitool)
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            with patch.object(dronecot, "SerialWorker", return_value="serial"):
+                with patch.object(dronecot, "RIDWorker", return_value="tracks"):
+                    with patch.object(
+                        dronecot, "SensorWorker", return_value="receiver"
+                    ) as sensor_worker:
+                        tasks = dronecot.functions.create_tasks(config, clitool)
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
         self.assertEqual(tasks, {"serial", "tracks"})
         sensor_worker.assert_not_called()
 
