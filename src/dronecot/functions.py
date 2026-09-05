@@ -65,6 +65,12 @@ _DJI_Logger = logging.getLogger(__name__)
 APP_NAME = "dronecot"
 
 
+def sensor_beacon_enabled(config: Union[dict, SectionProxy]) -> bool:
+    """Return whether the periodic receiver beacon is enabled."""
+    value = config.get("SENSOR_BEACON", "1")
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _pacific_timestamp() -> str:
     """Return a human-readable last-seen timestamp, falling back if tzdata is absent."""
     try:
@@ -160,7 +166,8 @@ def create_tasks(config: SectionProxy, clitool: pytak.CLITool) -> Set[pytak.Work
     if config.get("ENABLE_RX_MOCK", "0") == "1":
         tasks.add(dronecot.RXMockWorker(clitool.rx_queue, config))
 
-    tasks.add(dronecot.SensorWorker(clitool.tx_queue, config))
+    if sensor_beacon_enabled(config):
+        tasks.add(dronecot.SensorWorker(clitool.tx_queue, config))
 
     return tasks
 

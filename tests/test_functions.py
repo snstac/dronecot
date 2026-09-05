@@ -19,6 +19,8 @@
 import json
 import os
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import xml.etree.ElementTree as ET
 
@@ -45,6 +47,27 @@ def load_sample_data(file_path, line=0):
 
 
 class FunctionsTestCase(unittest.TestCase):
+    def test_sensor_beacon_switch(self):
+        """Receiver beacons default on and accept common false values."""
+        enabled = dronecot.functions.sensor_beacon_enabled
+        self.assertTrue(enabled({}))
+        for value in ("0", "false", "False", "no", "off"):
+            with self.subTest(value=value):
+                self.assertFalse(enabled({"SENSOR_BEACON": value}))
+
+    def test_create_tasks_can_omit_sensor_beacon(self):
+        """Disabling the receiver beacon keeps drone processing enabled."""
+        clitool = SimpleNamespace(tx_queue=object())
+        config = {"FEED_URL": "serial:///dev/ttyACM0", "SENSOR_BEACON": "0"}
+        with patch.object(dronecot, "SerialWorker", return_value="serial"):
+            with patch.object(dronecot, "RIDWorker", return_value="tracks"):
+                with patch.object(
+                    dronecot, "SensorWorker", return_value="receiver"
+                ) as sensor_worker:
+                    tasks = dronecot.functions.create_tasks(config, clitool)
+        self.assertEqual(tasks, {"serial", "tracks"})
+        sensor_worker.assert_not_called()
+
     """
     Test class for functions... functions.
     """

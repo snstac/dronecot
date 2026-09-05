@@ -186,6 +186,7 @@ See [Feeds](feeds.md) for expected MQTT message formats.
 |-----|---------|-------------|
 | `COT_URL` | `udp+wo://239.2.3.1:6969` (PyTAK) | CoT destination |
 | `SENSOR_ID` | `dronecot_{hostname}` | Sensor identifier in CoT |
+| `SENSOR_BEACON` | `1` | Set `0` to disable the receiver marker without disabling drone tracks |
 | `SENSOR_COT_TYPE` | `a-f-G-E-S-E` | CoT type for sensor status events |
 | `OP_COT_TYPE` | `a-u-G` | CoT type for operator markers |
 | `UAS_COT_TYPE` | `a-u-A-M-H-Q` | CoT type for aircraft markers |

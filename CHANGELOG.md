@@ -1,3 +1,8 @@
+## DroneCOT 2.3.10
+
+- Add `SENSOR_BEACON=0` to disable the periodic receiver marker without
+  disabling drone tracks.
+
 ## DroneCOT 2.3.8
 
 - Add opt-in `SERIAL_CRLF_NORMALIZE` support for receivers that send binary
